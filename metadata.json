@@ -1,0 +1,6 @@
+{
+  "name": "Chuồng Heo Vui Vẻ",
+  "description": "Game nuôi heo nông trại giải trí: chăm sóc, cho ăn, thu thập giống heo độc đáo, lai tạo và ghé thăm nông trại hàng xóm.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
