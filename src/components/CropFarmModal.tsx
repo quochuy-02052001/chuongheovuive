@@ -42,6 +42,7 @@ interface CropFarmModalProps {
   onSellCrop: (seedId: string, qty: number) => void;
   onCompleteOrder: (orderId: string) => void;
   onRefreshOrder: (orderId: string) => void;
+  onRefreshAllOrders: () => void;
   onOpenAchievements?: () => void;
 }
 
@@ -75,6 +76,7 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
   onSellCrop,
   onCompleteOrder,
   onRefreshOrder,
+  onRefreshAllOrders,
   onOpenAchievements,
 }) => {
   const [farmTool, setFarmTool] = useState<FarmTool>('plant');
@@ -139,6 +141,14 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
   const totalStoredCrops = useMemo(
     () => storedEntries.reduce((sum, e) => sum + e.qty, 0),
     [storedEntries]
+  );
+
+  const readyOrdersCount = useMemo(
+    () =>
+      orders.filter((order) =>
+        order.items.every((req) => (storage[req.seedId] || 0) >= req.qty)
+      ).length,
+    [orders, storage]
   );
 
   const selectedSeed = CROP_SEED_MAP[selectedSeedId] || CROP_SEEDS[0];
@@ -376,7 +386,7 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
               <button
                 type="button"
                 onClick={() => toggleConsoleTab('orders')}
-                className={`px-2 py-1.5 rounded-xl border-2 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer whitespace-nowrap transition ${
+                className={`relative px-2 py-1.5 rounded-xl border-2 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer whitespace-nowrap transition ${
                   showConsole && rightTab === 'orders'
                     ? 'bg-amber-200 text-[#3c1e08] border-amber-800'
                     : 'bg-[#f4e5c8] hover:bg-white text-[#4a280d] border-[#cfa06b]'
@@ -384,6 +394,11 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
               >
                 <Truck className="w-3.5 h-3.5 text-amber-800" />
                 <span>Đơn ({orders.length})</span>
+                {readyOrdersCount > 0 && (
+                  <span className="px-1 py-0.2 rounded-full bg-emerald-600 text-white text-[9px] font-extrabold leading-none">
+                    {readyOrdersCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -579,9 +594,19 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
 
             {rightTab === 'orders' && (
               <div className="space-y-2">
-                <p className="text-[11px] font-semibold text-[#5c3618] px-1">
-                  Giao nông sản thu hoạch để nhận thưởng lớn Xu, XP & Ngọc.
-                </p>
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <p className="text-[11px] font-bold text-[#5c3618]">
+                    {orders.length} đơn theo <span className="text-amber-900">Lv.{state.level}</span> · Giao nhận Xu, XP & Ngọc
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onRefreshAllOrders}
+                    title="Làm mới tất cả đơn hàng phù hợp cấp độ hiện tại"
+                    className="px-2 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-extrabold flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Đổi tất cả
+                  </button>
+                </div>
                 {orders.map((order) => {
                   const canFulfill = order.items.every(
                     (req) => (storage[req.seedId] || 0) >= req.qty
@@ -589,7 +614,11 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
                   return (
                     <div
                       key={order.id}
-                      className="p-2.5 rounded-xl bg-white border border-[#c29b68] space-y-2"
+                      className={`p-2.5 rounded-xl border-2 space-y-2 ${
+                        canFulfill
+                          ? 'bg-emerald-50/90 border-emerald-500 shadow-xs'
+                          : 'bg-white border-[#c29b68]'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -610,7 +639,7 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
                         </button>
                       </div>
 
-                      <div className="flex flex-wrap gap-2 text-[11px] font-bold">
+                      <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
                         {order.items.map((req) => {
                           const seed = CROP_SEED_MAP[req.seedId] || CROP_SEEDS[0];
                           const owned = storage[req.seedId] || 0;
@@ -618,12 +647,15 @@ export const CropFarmModal: React.FC<CropFarmModalProps> = ({
                           return (
                             <span
                               key={req.seedId}
-                              className={`flex items-center gap-1 ${
-                                ok ? 'text-emerald-800' : 'text-rose-700'
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
+                                ok
+                                  ? 'bg-emerald-100/80 border-emerald-300 text-emerald-900'
+                                  : 'bg-amber-50/70 border-[#dfc69d] text-rose-800'
                               }`}
                             >
                               <span>{seed.icon}</span>
-                              <span>{seed.name}:</span>
+                              <span>{seed.name}</span>
+                              <span className="text-[9px] opacity-75">Lv.{seed.unlockLevel}</span>
                               <span className="font-mono-nums">
                                 {owned}/{req.qty}
                               </span>

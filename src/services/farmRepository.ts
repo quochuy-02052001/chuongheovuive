@@ -1,4 +1,9 @@
-import { createInitialCropOrders, createInitialCropPlots, getUnlockedPlotCount } from '../data/cropSeeds';
+import {
+  createInitialCropOrders,
+  createInitialCropPlots,
+  ensureCropOrdersForLevel,
+  getUnlockedPlotCount,
+} from '../data/cropSeeds';
 import { BREED_MAP, PIG_BREEDS } from '../data/pigBreeds';
 import {
   AchievementItem,
@@ -982,10 +987,7 @@ function loadRawSlot(slot: PartnerSlot): FarmState | null {
           : createInitialCropPlots(),
       cropStorage: parsed.cropStorage && typeof parsed.cropStorage === 'object' ? parsed.cropStorage : {},
       fertilizerCount: typeof parsed.fertilizerCount === 'number' ? parsed.fertilizerCount : 3,
-      cropOrders:
-        Array.isArray(parsed.cropOrders) && parsed.cropOrders.length > 0
-          ? parsed.cropOrders
-          : createInitialCropOrders(parsed.level || 1),
+      cropOrders: ensureCropOrdersForLevel(parsed.cropOrders, parsed.level || 1),
       totalCropsPlanted: parsed.totalCropsPlanted || 0,
       totalCropsHarvested: parsed.totalCropsHarvested || 0,
       totalOrdersCompleted: parsed.totalOrdersCompleted || 0,
@@ -1246,10 +1248,7 @@ class LocalFarmRepository implements FarmRepository {
           : createInitialCropPlots(),
       cropStorage: parsed.cropStorage && typeof parsed.cropStorage === 'object' ? parsed.cropStorage : {},
       fertilizerCount: typeof parsed.fertilizerCount === 'number' ? parsed.fertilizerCount : 3,
-      cropOrders:
-        Array.isArray(parsed.cropOrders) && parsed.cropOrders.length > 0
-          ? parsed.cropOrders
-          : createInitialCropOrders(parsed.level || 1),
+      cropOrders: ensureCropOrdersForLevel(parsed.cropOrders, parsed.level || 1),
       totalCropsPlanted: parsed.totalCropsPlanted || 0,
       totalCropsHarvested: parsed.totalCropsHarvested || 0,
       totalOrdersCompleted: parsed.totalOrdersCompleted || 0,

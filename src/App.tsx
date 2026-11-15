@@ -35,6 +35,7 @@ import {
   computePlotProgress,
   createInitialCropOrders,
   createInitialCropPlots,
+  ensureCropOrdersForLevel,
   generateCropOrder,
   getUnlockedPlotCount,
 } from './data/cropSeeds';
@@ -259,12 +260,17 @@ export default function App() {
         nextLevel += 1;
         bonusCoins += nextLevel * 60;
       }
+      const nextCropOrders =
+        nextLevel > prev.level
+          ? ensureCropOrdersForLevel(prev.cropOrders, nextLevel, prev.level, prev.cropStorage)
+          : prev.cropOrders;
       return syncAchievements({
         ...prev,
         coins: Math.max(0, prev.coins + deltaCoins + bonusCoins),
         gems: Math.max(0, prev.gems + deltaGems),
         xp: nextXp,
         level: nextLevel,
+        cropOrders: nextCropOrders,
       });
     },
     []
@@ -2592,12 +2598,25 @@ export default function App() {
     soundFx.playClick();
     setFarm((prev) => {
       if (!prev) return prev;
-      const baseOrders = prev.cropOrders || createInitialCropOrders(prev.level);
+      const baseOrders = ensureCropOrdersForLevel(prev.cropOrders, prev.level);
       return {
         ...prev,
         cropOrders: baseOrders.map((o) =>
           o.id === orderId ? generateCropOrder(prev.level) : o
         ),
+      };
+    });
+  };
+
+  const handleRefreshAllOrders = () => {
+    if (!farm) return;
+    soundFx.playClick();
+    pushFeedback(50, 32, `🔄 Đã cập nhật ${createInitialCropOrders(farm.level).length} đơn hàng mới theo Lv.${farm.level}!`, 'xp');
+    setFarm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cropOrders: createInitialCropOrders(prev.level),
       };
     });
   };
@@ -3486,6 +3505,7 @@ export default function App() {
           onSellCrop={handleSellCrop}
           onCompleteOrder={handleCompleteOrder}
           onRefreshOrder={handleRefreshOrder}
+          onRefreshAllOrders={handleRefreshAllOrders}
           onOpenAchievements={() => {
             soundFx.playClick();
             setAchievementInitCat('crop_farm');

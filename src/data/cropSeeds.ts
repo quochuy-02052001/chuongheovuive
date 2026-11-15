@@ -424,24 +424,87 @@ export function computePlotProgress(plot: FarmPlot, now: number): {
   };
 }
 
-const ORDER_CUSTOMERS = [
-  { title: 'Đơn Chợ Sáng', customer: 'Bếp Cô Ba' },
-  { title: 'Đơn Nhà Hàng Xanh', customer: 'Đầu Bếp Minh' },
-  { title: 'Đơn Siêu Thị Nông Sản', customer: 'Quầy Trái Cây' },
-  { title: 'Đơn Tiệm Bánh Ngọt', customer: 'Tiệm Mochi' },
-  { title: 'Đơn Xuất Khẩu Tươi', customer: 'Thương Lái Huy' },
+export const TARGET_CROP_ORDERS = 6;
+
+interface OrderCustomerTemplate {
+  title: string;
+  customer: string;
+  minLevel: number;
+}
+
+const ORDER_CUSTOMERS: OrderCustomerTemplate[] = [
+  { title: 'Đơn Chợ Sáng', customer: 'Bếp Cô Ba', minLevel: 1 },
+  { title: 'Đơn Quán Cơm Quê', customer: 'Chị Tư Hiền', minLevel: 1 },
+  { title: 'Đơn Căng Tin Trường', customer: 'Cô Lan', minLevel: 1 },
+  { title: 'Đơn Sạp Rau Sạch', customer: 'Bác Năm', minLevel: 2 },
+  { title: 'Đơn Nhà Hàng Xanh', customer: 'Đầu Bếp Minh', minLevel: 4 },
+  { title: 'Đơn Tiệm Bánh Ngọt', customer: 'Tiệm Mochi', minLevel: 4 },
+  { title: 'Đơn Quán Sinh Tố', customer: 'Trà Sữa Bông', minLevel: 5 },
+  { title: 'Đơn Siêu Thị Nông Sản', customer: 'Quầy Trái Cây', minLevel: 6 },
+  { title: 'Đơn Khách Sạn 5 Sao', customer: 'Chef Hoàng', minLevel: 10 },
+  { title: 'Đơn Tiệc Cưới Mùa Thu', customer: 'Nhà Hàng Sen', minLevel: 12 },
+  { title: 'Đơn Thực Phẩm Hữu Cơ', customer: 'GreenMart', minLevel: 14 },
+  { title: 'Đơn Xuất Khẩu Tươi', customer: 'Thương Lái Huy', minLevel: 16 },
+  { title: 'Đơn Quà Biếu Cao Cấp', customer: 'Phủ Chủ Tịch', minLevel: 20 },
+  { title: 'Đơn Đặc Sản Hoàng Gia', customer: 'Ẩm Thực Cung Đình', minLevel: 22 },
 ];
 
-export function generateCropOrder(level: number): CropOrder {
-  const availableSeeds = CROP_SEEDS.filter((s) => s.unlockLevel <= Math.max(1, level));
-  const shuffled = [...availableSeeds].sort(() => Math.random() - 0.5);
-  const itemCount = availableSeeds.length >= 3 && Math.random() < 0.65 ? 2 : 1;
-  const picked = shuffled.slice(0, itemCount);
+function pickWeightedSeed(pool: CropSeed[], safeLevel: number): CropSeed {
+  const weights = pool.map((seed) => {
+    const gap = Math.max(0, safeLevel - seed.unlockLevel);
+    if (gap <= 3) return 6; // Prioritize newly unlocked crops for current level
+    if (gap <= 7) return 3;
+    return 1;
+  });
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
 
-  const items = picked.map((seed) => ({
-    seedId: seed.id,
-    qty: Math.min(6, 2 + Math.floor(Math.random() * 3)),
-  }));
+export function generateCropOrder(level: number, preferredMinItems?: number): CropOrder {
+  const safeLevel = Math.max(1, level);
+  const availableSeeds = CROP_SEEDS.filter((s) => s.unlockLevel <= safeLevel);
+  const maxDistinct = availableSeeds.length;
+
+  let itemCount = 1;
+  if (safeLevel <= 2) {
+    itemCount = maxDistinct >= 2 && Math.random() < 0.5 ? 2 : 1;
+  } else if (safeLevel <= 6) {
+    itemCount = maxDistinct >= 2 ? (Math.random() < 0.8 ? 2 : 1) : 1;
+  } else if (safeLevel <= 13) {
+    itemCount = maxDistinct >= 3 && Math.random() < 0.55 ? 3 : 2;
+  } else {
+    itemCount = maxDistinct >= 4 && Math.random() < 0.45 ? 4 : 3;
+  }
+
+  if (preferredMinItems !== undefined) {
+    itemCount = Math.max(itemCount, preferredMinItems);
+  }
+  itemCount = Math.min(maxDistinct, itemCount);
+
+  const remaining = [...availableSeeds];
+  const picked: CropSeed[] = [];
+  for (let i = 0; i < itemCount && remaining.length > 0; i++) {
+    const chosen = pickWeightedSeed(remaining, safeLevel);
+    picked.push(chosen);
+    const idx = remaining.findIndex((s) => s.id === chosen.id);
+    if (idx >= 0) remaining.splice(idx, 1);
+  }
+
+  const levelQtyBonus = safeLevel >= 15 ? 2 : safeLevel >= 7 ? 1 : 0;
+  const items = picked.map((seed) => {
+    // High-unlock crops ask for slightly tighter quantities so orders remain rewarding
+    const isTopCrop = seed.unlockLevel >= 16;
+    const baseQty = isTopCrop ? 2 + Math.floor(Math.random() * 2) : 2 + Math.floor(Math.random() * 3);
+    return {
+      seedId: seed.id,
+      qty: Math.min(7, baseQty + (isTopCrop ? Math.min(1, levelQtyBonus) : levelQtyBonus)),
+    };
+  });
 
   let baseCoins = 0;
   let baseXp = 0;
@@ -451,19 +514,67 @@ export function generateCropOrder(level: number): CropOrder {
     baseXp += seed.harvestXp * req.qty;
   }
 
-  // Delivery orders give a juicy +45% bonus coins & +55% bonus XP + Gems
-  const cust = ORDER_CUSTOMERS[Math.floor(Math.random() * ORDER_CUSTOMERS.length)];
+  const coinMult = 1.45 + Math.min(0.45, (safeLevel - 1) * 0.02);
+  const xpMult = 1.55 + Math.min(0.55, (safeLevel - 1) * 0.025);
+
+  const eligibleCustomers = ORDER_CUSTOMERS.filter((c) => c.minLevel <= safeLevel);
+  // Prefer higher-tier customers as level rises
+  const tierPool = eligibleCustomers.slice(-Math.min(eligibleCustomers.length, 6));
+  const cust = tierPool[Math.floor(Math.random() * tierPool.length)] || ORDER_CUSTOMERS[0];
+
   return {
     id: `order_${Math.random().toString(36).slice(2, 8)}_${Date.now().toString(36)}`,
     title: cust.title,
     customer: cust.customer,
     items,
-    rewardCoins: Math.round(baseCoins * 1.45),
-    rewardXp: Math.round(baseXp * 1.55),
-    rewardGems: itemCount >= 2 ? 2 : 1,
+    rewardCoins: Math.round(baseCoins * coinMult),
+    rewardXp: Math.round(baseXp * xpMult),
+    rewardGems: itemCount >= 4 ? 4 : itemCount === 3 ? 3 : itemCount === 2 ? 2 : 1,
   };
 }
 
 export function createInitialCropOrders(level: number): CropOrder[] {
-  return [generateCropOrder(level), generateCropOrder(level), generateCropOrder(level)];
+  const safeLevel = Math.max(1, level);
+  return Array.from({ length: TARGET_CROP_ORDERS }, (_, idx) =>
+    generateCropOrder(safeLevel, idx === TARGET_CROP_ORDERS - 1 && safeLevel >= 5 ? 3 : undefined)
+  );
+}
+
+export function ensureCropOrdersForLevel(
+  existingOrders: CropOrder[] | undefined,
+  level: number,
+  prevLevel?: number,
+  storage?: Record<string, number>
+): CropOrder[] {
+  const safeLevel = Math.max(1, level);
+  if (!Array.isArray(existingOrders) || existingOrders.length === 0) {
+    return createInitialCropOrders(safeLevel);
+  }
+
+  let next = [...existingOrders];
+
+  // If the player just leveled up and unlocked new seeds, refresh unstarted orders
+  // (orders where player holds 0 of every requested crop) so new crops appear immediately!
+  if (prevLevel !== undefined && safeLevel > prevLevel) {
+    const unlockedNewSeed = CROP_SEEDS.some(
+      (s) => s.unlockLevel > prevLevel && s.unlockLevel <= safeLevel
+    );
+    if (unlockedNewSeed) {
+      let refreshedCount = 0;
+      next = next.map((order) => {
+        const hasAnyStock = order.items.some((req) => ((storage || {})[req.seedId] || 0) > 0);
+        if (!hasAnyStock && refreshedCount < 3) {
+          refreshedCount += 1;
+          return generateCropOrder(safeLevel);
+        }
+        return order;
+      });
+    }
+  }
+
+  while (next.length < TARGET_CROP_ORDERS) {
+    next.push(generateCropOrder(safeLevel));
+  }
+
+  return next;
 }
