@@ -1,8 +1,9 @@
 import React from 'react';
-import { Archive, Heart, Pill, Sparkles, Utensils, X } from 'lucide-react';
-import { BREED_MAP, PIG_BREEDS, RARITY_LABELS } from '../data/pigBreeds';
+import { Archive, Heart, X } from 'lucide-react';
+import { BREED_MAP, PIG_BREEDS, getBreedRarityBadge } from '../data/pigBreeds';
 import { PigInstance } from '../types/game';
 import { PigSprite } from './PigSprite';
+import { SupplyItemSprite } from './SupplyItemSprite';
 
 interface PigInspectorProps {
   pig: PigInstance;
@@ -42,7 +43,7 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
   onStealPig,
 }) => {
   const breed = BREED_MAP[pig.breedId] || PIG_BREEDS[0];
-  const rarity = RARITY_LABELS[breed.rarity];
+  const rarity = getBreedRarityBadge(breed);
   const isAdult = pig.growth >= 100;
   const isMaxHappy = Math.round(pig.happiness) >= 100;
   const sellPrice = isAdult
@@ -53,10 +54,12 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
     pig.stage === 'adult' ? 'Trưởng Thành' : pig.stage === 'teen' ? 'Heo Choai' : 'Heo Con';
 
   return (
-    <div
-      style={{ right: 'max(0.5rem, env(safe-area-inset-right, 0px))' }}
-      className="absolute top-11 sm:top-16 z-40 w-[268px] sm:w-[320px] max-h-[calc(100dvh-145px)] sm:max-h-[calc(100dvh-190px)] overflow-y-auto farm-scroll parchment-panel rounded-2xl p-3 sm:p-3.5 shadow-2xl"
-    >
+    <div className="fixed inset-0 z-45 bg-transparent" onClick={onClose}>
+      <div
+        style={{ right: 'max(0.5rem, env(safe-area-inset-right, 0px))' }}
+        className="absolute top-11 sm:top-16 z-46 w-[268px] sm:w-[320px] max-h-[calc(100dvh-145px)] sm:max-h-[calc(100dvh-190px)] overflow-y-auto farm-scroll parchment-panel rounded-2xl p-3 sm:p-3.5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
       <div className="flex items-start justify-between gap-2 pb-2 border-b border-[#78471e]/20">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-[#fef3c7] border border-[#b47b44] flex items-center justify-center shrink-0">
@@ -144,7 +147,7 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
             onClick={() => onFeed(pig.id, false)}
             className="py-1.5 px-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-stone-300 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
           >
-            <Utensils className="w-3.5 h-3.5" /> Cám ({feedCount})
+            <SupplyItemSprite itemId="feed_standard" size={18} /> Cám ({feedCount})
           </button>
           <button
             type="button"
@@ -152,7 +155,7 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
             onClick={() => onFeed(pig.id, true)}
             className="py-1.5 px-2 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:bg-stone-300 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5" /> Bánh ({deluxeFeedCount})
+            <SupplyItemSprite itemId="feed_deluxe" size={18} /> Bánh ({deluxeFeedCount})
           </button>
           <button
             type="button"
@@ -169,7 +172,7 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
               onClick={() => onHeal(pig.id)}
               className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-stone-300 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
             >
-              <Pill className="w-3.5 h-3.5" /> Chữa ({medCount})
+              <SupplyItemSprite itemId="medicine_pill" size={18} /> Chữa ({medCount})
             </button>
           ) : (
             <button
@@ -178,7 +181,7 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
               onClick={() => onVitamin(pig.id)}
               className="py-1.5 px-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-stone-300 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5" /> Vitamin ({vitaminCount})
+              <SupplyItemSprite itemId="vitamin_boost" size={18} /> Vitamin ({vitaminCount})
             </button>
           )}
           {onStorePig && (
@@ -205,6 +208,7 @@ export const PigInspector: React.FC<PigInspectorProps> = ({
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 };

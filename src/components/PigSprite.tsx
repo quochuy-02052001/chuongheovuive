@@ -22,13 +22,13 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
   isSick = false,
   isBouncing = false,
   moodBubble = null,
-  size = 76,
+  size = 92,
   selected = false,
 }) => {
   const rawUid = useId();
   const uid = rawUid.replace(/[^a-zA-Z0-9_-]/g, '');
   const breed = BREED_MAP[breedId] || BREED_MAP['pink_flower'];
-  const stageScale = stage === 'piglet' ? 0.78 : stage === 'teen' ? 0.91 : 1.04;
+  const stageScale = stage === 'piglet' ? 0.84 : stage === 'teen' ? 0.98 : 1.18;
   // Default SVG faces LEFT (snout on left, tail on right). Flip when facing right.
   const flipX = facing === 'right' ? -1 : 1;
 
@@ -42,6 +42,8 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
   const goldDragonGradId = `dg-${uid}`;
   const phoenixGradId = `ph-${uid}`;
   const frostGradId = `fr-${uid}`;
+  const crystalTrophyGradId = `tc-${uid}`;
+  const emperorRubyGradId = `er-${uid}`;
 
   const isDragon = breed.pattern === 'ninja';
   const isGoldDragon = breed.pattern === 'dragon_gold';
@@ -58,6 +60,8 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
   const isUnicorn = breed.pattern === 'unicorn';
   const isKitsune = breed.pattern === 'kitsune';
   const isPhoenix = breed.pattern === 'phoenix';
+  const isTrophyCrystal = breed.pattern === 'trophy_crystal';
+  const isEmperorRuby = breed.pattern === 'emperor_ruby';
 
   const bodyFill =
     breed.pattern === 'rainbow'
@@ -74,6 +78,10 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
       ? `url(#${phoenixGradId})`
       : isFrost
       ? `url(#${frostGradId})`
+      : isTrophyCrystal
+      ? `url(#${crystalTrophyGradId})`
+      : isEmperorRuby
+      ? `url(#${emperorRubyGradId})`
       : `url(#${bodyGradId})`;
 
   const snoutBase =
@@ -85,10 +93,10 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
       ? '#475569'
       : isGoldDragon
       ? '#fde047'
-      : isFrost
+      : isFrost || isTrophyCrystal
       ? '#e0f2fe'
-      : isDevil
-      ? '#fb7185'
+      : isDevil || isEmperorRuby
+      ? '#fda4af'
       : isTigerCat || isCheshireCat
       ? '#ffb4c6'
       : '#ff9ebb';
@@ -102,17 +110,19 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
       ? '#64748b'
       : isGoldDragon
       ? '#fef9c3'
-      : isFrost
+      : isFrost || isTrophyCrystal
       ? '#ffffff'
+      : isEmperorRuby
+      ? '#fff1f2'
       : '#ffd6e4';
 
   const outlineColor = isMecha
     ? '#475569'
     : isDragon
     ? '#1e293b'
-    : isFrost
-    ? '#0369a1'
-    : isDevil
+    : isFrost || isTrophyCrystal
+    ? '#0e7490'
+    : isDevil || isEmperorRuby
     ? '#881337'
     : '#542912';
 
@@ -120,9 +130,9 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
     ? '#64748b'
     : isDragon
     ? '#0f172a'
-    : isFrost
-    ? '#0284c7'
-    : isRoyalGold || isGoldDragon
+    : isFrost || isTrophyCrystal
+    ? '#0891b2'
+    : isRoyalGold || isGoldDragon || isEmperorRuby
     ? '#b45309'
     : '#6e3a1e';
 
@@ -245,6 +255,20 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
               <stop offset="45%" stopColor="#bae6fd" />
               <stop offset="88%" stopColor="#38bdf8" />
               <stop offset="100%" stopColor="#0284c7" />
+            </radialGradient>
+
+            <radialGradient id={crystalTrophyGradId} cx="34%" cy="24%" r="75%">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="42%" stopColor="#a5f3fc" />
+              <stop offset="82%" stopColor="#22d3ee" />
+              <stop offset="100%" stopColor="#0891b2" />
+            </radialGradient>
+
+            <radialGradient id={emperorRubyGradId} cx="34%" cy="24%" r="75%">
+              <stop offset="0%" stopColor="#ffe4e6" />
+              <stop offset="40%" stopColor="#fb7185" />
+              <stop offset="82%" stopColor="#e11d48" />
+              <stop offset="100%" stopColor="#881337" />
             </radialGradient>
 
             <clipPath id={bodyClipId}>
@@ -547,6 +571,24 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
                 <circle cx="84" cy="47" r="1.7" />
                 <circle cx="67" cy="59" r="2" />
                 <path d="M 48 55 Q 69 42 92 55" stroke="#a5b4fc" strokeWidth="2.8" fill="none" opacity="0.55" />
+              </g>
+            )}
+
+            {isTrophyCrystal && (
+              <g>
+                <polygon points="62,34 68,42 62,50 56,42" fill="#ffffff" opacity="0.72" />
+                <polygon points="79,45 84,52 79,59 74,52" fill="#fef08a" opacity="0.78" />
+                <path d="M 48 54 Q 68 65 92 52" stroke="#fde047" strokeWidth="3.5" fill="none" opacity="0.75" />
+              </g>
+            )}
+
+            {isEmperorRuby && (
+              <g>
+                {/* Royal golden sash & ermine cape trim */}
+                <path d="M 46 22 Q 62 52 50 86" stroke="#fde047" strokeWidth="6" fill="none" opacity="0.88" />
+                <path d="M 52 22 Q 68 52 56 86" stroke="#fff1f2" strokeWidth="3.5" fill="none" opacity="0.9" />
+                <polygon points="75,38 78,43 83,43 79,46 80,51 75,48 70,51 71,46 67,43 72,43" fill="#fde047" opacity="0.9" />
+                <circle cx="85" cy="57" r="2.2" fill="#fef08a" opacity="0.85" />
               </g>
             )}
 
@@ -930,6 +972,30 @@ export const PigSprite: React.FC<PigSpriteProps> = ({
             <g fill="#fef08a" stroke="#92400e" strokeWidth="1.7" strokeLinejoin="round">
               <path d="M 30 25 Q 26 11 36 11 Q 37 18 36 25 Z" />
               <path d="M 43 24 Q 47 10 55 14 Q 52 20 48 25 Z" />
+            </g>
+          )}
+
+          {isTrophyCrystal && (
+            <g transform="translate(38, 20)">
+              <polygon
+                points="-12,8 -10,-4 -4,2 0,-11 4,2 10,-4 12,8"
+                fill="#fef08a"
+                stroke="#854d0e"
+                strokeWidth="1.7"
+                strokeLinejoin="round"
+              />
+              <polygon points="0,-5 3,1 0,6 -3,1" fill="#22d3ee" stroke="#0e7490" strokeWidth="1" />
+              <circle cx="-7" cy="2" r="1.6" fill="#38bdf8" />
+              <circle cx="7" cy="2" r="1.6" fill="#38bdf8" />
+            </g>
+          )}
+
+          {isEmperorRuby && (
+            <g transform="translate(38, 19)">
+              <path d="M -13 8 Q 0 1 13 8 L 10 -2 L 4 2 L 0 -11 L -4 2 L -10 -2 Z" fill="#facc15" stroke="#78350f" strokeWidth="1.8" strokeLinejoin="round" />
+              <circle cx="0" cy="-1" r="3" fill="#e11d48" stroke="#fff1f2" strokeWidth="1" />
+              <circle cx="-7.5" cy="3" r="1.7" fill="#fef08a" />
+              <circle cx="7.5" cy="3" r="1.7" fill="#fef08a" />
             </g>
           )}
         </svg>

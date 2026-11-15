@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { BottomHud } from './components/BottomHud';
 import { CoupleModal } from './components/CoupleModal';
+import { CropFarmModal } from './components/CropFarmModal';
 import { FarmBuildings } from './components/FarmBuildings';
 import { FriendModal } from './components/FriendModal';
 import {
@@ -28,6 +29,16 @@ import { PigInspector } from './components/PigInspector';
 import { PigSprite } from './components/PigSprite';
 import { YardItemSprite } from './components/YardItemSprite';
 import {
+  CROP_SEEDS,
+  CROP_SEED_MAP,
+  FERTILIZER_PRICE,
+  computePlotProgress,
+  createInitialCropOrders,
+  createInitialCropPlots,
+  generateCropOrder,
+  getUnlockedPlotCount,
+} from './data/cropSeeds';
+import {
   BREED_MAP,
   PIG_BREEDS,
   SHOP_SUPPLIES,
@@ -43,7 +54,7 @@ import {
   encodeCouplePacket,
   farmRepository,
   generateRoomCode,
-  getBarnExpandCost,
+  getBarnExpandInfo,
   hasAnySavedFarm,
   normalizeRoomCode,
   syncAchievements,
@@ -60,6 +71,7 @@ import {
 } from './services/p2pSession';
 import { RoomCloudSession, RoomSyncStatus, getOrCreateDeviceId } from './services/roomSync';
 import {
+  AchievementCategory,
   CouplePacket,
   BreedingIncubator,
   FarmState,
@@ -83,6 +95,8 @@ export default function App() {
   const [farm, setFarm] = useState<FarmState | null>(null);
   const [activeTool, setActiveTool] = useState<ToolMode>('hand');
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  const [achievementInitCat, setAchievementInitCat] = useState<'all' | AchievementCategory>('all');
+  const [returnToCropFarm, setReturnToCropFarm] = useState(false);
   const [selectedPigId, setSelectedPigId] = useState<string | null>(null);
   const [visitingNeighborId, setVisitingNeighborId] = useState<string | null>(null);
   const [feedbacks, setFeedbacks] = useState<FloatingFeedback[]>([]);
@@ -270,9 +284,10 @@ export default function App() {
     []
   );
 
-  // Live Yard Simulation Tick (every 1000ms)
+  // Live Yard Simulation Tick (every 1000ms, paused when tab hidden to prevent phone heating)
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       setVnClock(getVietnamClock());
       setFarm((prev) => {
         if (!prev) return prev;
@@ -967,13 +982,20 @@ export default function App() {
 
     if (drop.type === 'poop') {
       soundFx.playSweep();
-      pushFeedback(drop.x, drop.y - 4, `Sạch sẽ! +${drop.value} ₫`, 'coin');
+      const gotFert = Math.random() < 0.55 ? 1 : 0;
+      pushFeedback(
+        drop.x,
+        drop.y - 4,
+        gotFert ? `Sạch sẽ! +${drop.value} ₫ · +1 🧪` : `Sạch sẽ! +${drop.value} ₫`,
+        'coin'
+      );
       setFarm((prev) => {
         if (!prev) return prev;
-        let updated = {
+        let updated: FarmState = {
           ...prev,
           drops: prev.drops.filter((d) => d.id !== drop.id),
           totalCleaned: prev.totalCleaned + 1,
+          fertilizerCount: (prev.fertilizerCount ?? 0) + gotFert,
         };
         updated = addXpAndCoins(updated, drop.value, 6);
         updated = bumpQuest(updated, 'clean', 1);
@@ -1074,23 +1096,34 @@ export default function App() {
     }
     const meds = farm.inventory['medicine_pill'] || 0;
     if (meds <= 0) {
+      pushFeedback(50, 40, 'Hết Thuốc Bổ rồi — mở Cửa Hàng để mua thêm!', 'warn');
       setActiveModal('shop');
       return;
     }
     const count = Math.min(meds, sickPigs.length);
     const healIds = new Set(sickPigs.slice(0, count).map((p) => p.id));
     soundFx.playWater();
-    pushFeedback(50, 40, `Đã chữa cho ${count} bé heo!`, 'heal');
+    pushFeedback(50, 40, `💊 Đã chữa bệnh nhanh cho ${count} bé heo!`, 'heal');
     setFarm((prev) => {
       if (!prev) return prev;
-      return {
+      const updated: FarmState = {
         ...prev,
-        pigs: prev.pigs.map((p) => (healIds.has(p.id) ? { ...p, isSick: false, health: 100 } : p)),
+        pigs: prev.pigs.map((p) =>
+          healIds.has(p.id)
+            ? {
+                ...p,
+                isSick: false,
+                health: 100,
+                moodBubble: p.moodBubble === 'sick' ? null : p.moodBubble,
+              }
+            : p
+        ),
         inventory: {
           ...prev.inventory,
           medicine_pill: Math.max(0, (prev.inventory['medicine_pill'] || 0) - count),
         },
       };
+      return addXpAndCoins(updated, 0, count * 5);
     });
   };
 
@@ -1220,16 +1253,25 @@ export default function App() {
   };
 
   const handleExpandBarn = () => {
-    if (!farm || farm.barnCapacity >= 28) return;
-    const cost = getBarnExpandCost(farm.barnCapacity);
-    if (farm.coins < cost) return;
+    if (!farm) return;
+    const info = getBarnExpandInfo(farm.barnCapacity, farm.level);
+    if (info.isMax) return;
+    if (info.isLevelLocked) {
+      pushFeedback(50, 34, `Cần đạt Lv.${info.requiredLevel} để mở rộng chuồng!`, 'warn');
+      return;
+    }
+    if (farm.coins < info.cost) {
+      pushFeedback(50, 34, `Chưa đủ xu! Cần ${info.cost.toLocaleString('vi-VN')} ₫`, 'warn');
+      return;
+    }
     soundFx.playChest();
+    pushFeedback(50, 32, `🏠 Đã mở rộng chuồng lên ${info.nextCapacity} chỗ!`, 'coin');
     setFarm((prev) =>
       prev
         ? syncAchievements({
             ...prev,
-            coins: prev.coins - cost,
-            barnCapacity: Math.min(28, prev.barnCapacity + 4),
+            coins: prev.coins - info.cost,
+            barnCapacity: info.nextCapacity,
           })
         : prev
     );
@@ -1263,17 +1305,26 @@ export default function App() {
     }
 
     const childBreedId = resolveBreedingOutcome(pA.breedId, pB.breedId, useCharm);
+    const childBreed = BREED_MAP[childBreedId] || PIG_BREEDS[0];
+    const durationMs =
+      childBreed.rarity === 'legendary' ? 20 * 60 * 1000 :
+      childBreed.rarity === 'epic' ? 12 * 60 * 1000 :
+      childBreed.rarity === 'rare' ? 6 * 60 * 1000 :
+      childBreed.rarity === 'uncommon' ? 3 * 60 * 1000 :
+      2 * 60 * 1000;
+    const durationMinsText = Math.round(durationMs / 60000);
+
     const incubator: BreedingIncubator = {
       id: uid('incubator'),
       parentAName: pA.nickname,
       parentBName: pB.nickname,
       childBreedId,
       startAt: Date.now(),
-      durationMs: 5 * 60 * 1000, // 5 minutes = 300,000 ms
+      durationMs,
     };
 
     soundFx.playChest();
-    pushFeedback(50, 42, `🥚 Đã bắt đầu ấp trứng lai tạo (5 phút)! (-${breedCost.toLocaleString('vi-VN')} ₫)`, 'love');
+    pushFeedback(50, 42, `🥚 Đã bắt đầu ấp trứng (${durationMinsText} phút · Phẩm ${childBreed.rarity})! (-${breedCost.toLocaleString('vi-VN')} ₫)`, 'love');
 
     setFarm((prev) => {
       if (!prev) return prev;
@@ -1288,6 +1339,84 @@ export default function App() {
             }
           : prev.inventory,
       };
+    });
+  };
+
+  const handleCollectAllGifts = () => {
+    if (!farm) return;
+    const gifts = displayedDrops.filter((d) => d.type !== 'poop');
+    if (gifts.length === 0) {
+      pushFeedback(50, 40, 'Không có hộp quà nào trên sân!', 'warn');
+      return;
+    }
+    soundFx.playChest();
+    let totalCoins = 0;
+    let totalGems = 0;
+    gifts.forEach((d) => {
+      totalCoins += d.value;
+      if (d.type === 'chest' && Math.random() < 0.45) totalGems += 1;
+    });
+    pushFeedback(50, 40, `🎁 Đã thu ${gifts.length} quà! +${totalCoins} ₫ ${totalGems ? `+${totalGems} Ngọc` : ''}`, 'gem');
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      if (currentNeighbor) {
+        return {
+          ...prev,
+          neighbors: prev.neighbors.map((n) =>
+            n.id === currentNeighbor.id
+              ? { ...n, drops: n.drops.filter((d) => d.type === 'poop') }
+              : n
+          ),
+        };
+      }
+      let updated = {
+        ...prev,
+        drops: prev.drops.filter((d) => d.type === 'poop'),
+      };
+      return addXpAndCoins(updated, totalCoins, gifts.length * 5, totalGems);
+    });
+  };
+
+  const handleCleanAllPoop = () => {
+    if (!farm) return;
+    const poops = displayedDrops.filter((d) => d.type === 'poop');
+    if (poops.length === 0) {
+      pushFeedback(50, 40, 'Sân chuồng đang rất sạch sẽ!', 'heal');
+      return;
+    }
+    soundFx.playSweep();
+    const totalCoins = poops.reduce((sum, d) => sum + d.value, 0);
+    const fertBonus = currentNeighbor ? 0 : Math.max(1, Math.ceil(poops.length / 2));
+    pushFeedback(
+      50,
+      40,
+      fertBonus > 0
+        ? `🧹 Đã dọn ${poops.length} bãi phân! +${totalCoins} ₫ · +${fertBonus} 🧪`
+        : `🧹 Đã dọn ${poops.length} bãi phân! +${totalCoins} ₫`,
+      'coin'
+    );
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      if (currentNeighbor) {
+        return {
+          ...prev,
+          neighbors: prev.neighbors.map((n) =>
+            n.id === currentNeighbor.id
+              ? { ...n, drops: n.drops.filter((d) => d.type !== 'poop') }
+              : n
+          ),
+        };
+      }
+      let updated: FarmState = {
+        ...prev,
+        drops: prev.drops.filter((d) => d.type !== 'poop'),
+        totalCleaned: prev.totalCleaned + poops.length,
+        fertilizerCount: (prev.fertilizerCount ?? 0) + fertBonus,
+      };
+      updated = addXpAndCoins(updated, totalCoins, poops.length * 6);
+      return bumpQuest(updated, 'clean', poops.length);
     });
   };
 
@@ -1308,25 +1437,38 @@ export default function App() {
       childBreed.rarity === 'epic' ||
       childBreed.rarity === 'legendary';
 
+    const canPutInYard = farm.pigs.length < farm.barnCapacity;
+    const bagCount = farm.storedPigs?.length || 0;
+    if (!canPutInYard && bagCount >= MAX_STORED_PIGS) {
+      pushFeedback(50, 42, 'Chuồng và Túi Đồ đều đã đầy! Hãy bán hoặc dọn bớt trước khi thu hoạch.', 'warn');
+      return;
+    }
+
     soundFx.playChest();
     pushFeedback(
       50,
       42,
-      isRareHatch
+      !canPutInYard
+        ? `🎒 Chuồng đầy (${farm.pigs.length}/${farm.barnCapacity}) — đã đưa ${childBreed.name} vào Túi Đồ!`
+        : isRareHatch
         ? `🌟 BẤT NGỜ! Trứng nở ra ${childBreed.name}!`
         : `🎉 Trứng nở thành công: ${childBreed.name}!`,
       'gem'
     );
     if (isRareHatch) {
-      showLiveToast(`🌟 Tuyệt vời! Trứng ấp nở ra giống hiếm: ${childBreed.name}!`);
+      showLiveToast(
+        !canPutInYard
+          ? `🌟 Tuyệt vời! Trứng nở ra ${childBreed.name} và đã cất vào Túi Đồ!`
+          : `🌟 Tuyệt vời! Trứng ấp nở ra giống hiếm: ${childBreed.name}!`
+      );
     }
 
     setFarm((prev) => {
       if (!prev) return prev;
       const baby = createPigInstance(inc.childBreedId, { growth: 5 });
-      const canPutInYard = prev.pigs.length < prev.barnCapacity;
-      const nextPigs = canPutInYard ? [...prev.pigs, baby] : prev.pigs;
-      const nextStored = canPutInYard ? prev.storedPigs : [...(prev.storedPigs || []), baby];
+      const putInYard = prev.pigs.length < prev.barnCapacity;
+      const nextPigs = putInYard ? [...prev.pigs, baby] : prev.pigs;
+      const nextStored = putInYard ? prev.storedPigs : [...(prev.storedPigs || []), baby];
 
       const unlocked = prev.unlockedBreeds.includes(inc.childBreedId)
         ? prev.unlockedBreeds
@@ -1342,19 +1484,7 @@ export default function App() {
       };
       updated = addXpAndCoins(updated, 0, 45);
       updated = bumpQuest(updated, 'breed', 1);
-      updated = {
-        ...updated,
-        achievements: updated.achievements.map((a) => {
-          if (a.id.startsWith('ach_collector')) {
-            return { ...a, progress: unlocked.length, unlocked: unlocked.length >= a.target };
-          }
-          if (a.id === 'ach_breeder') {
-            return { ...a, progress: updated.totalBred, unlocked: updated.totalBred >= a.target };
-          }
-          return a;
-        }),
-      };
-      return updated;
+      return syncAchievements(updated);
     });
   };
 
@@ -1383,20 +1513,66 @@ export default function App() {
     if (!farm) return;
     const ach = farm.achievements.find((a) => a.id === achievementId);
     if (!ach || !ach.unlocked || ach.claimed) return;
+
+    const rewardBreedId = ach.rewardBreedId;
+    if (rewardBreedId) {
+      const hasYardRoom = farm.pigs.length < farm.barnCapacity;
+      const hasBagRoom = (farm.storedPigs?.length || 0) < MAX_STORED_PIGS;
+      if (!hasYardRoom && !hasBagRoom) {
+        soundFx.playClick();
+        pushFeedback(
+          50,
+          32,
+          'Chuồng và Túi Đồ đều đầy! Hãy bán hoặc cất bớt heo để nhận giống thưởng.',
+          'warn'
+        );
+        return;
+      }
+    }
+
     soundFx.playChest();
     const coinReward = ach.rewardCoins || 0;
+    const rewardBreed = rewardBreedId ? BREED_MAP[rewardBreedId] : undefined;
+    const willGoToBag = Boolean(rewardBreedId && farm.pigs.length >= farm.barnCapacity);
+
     pushFeedback(
       50,
       32,
-      coinReward > 0
+      rewardBreed
+        ? `🏆 Nhận giống độc quyền (Không lai): ${rewardBreed.name}${willGoToBag ? ' → Túi Đồ' : ''}! +${ach.rewardGems} Ngọc`
+        : coinReward > 0
         ? `🏆 +${ach.rewardGems} Ngọc · +${coinReward.toLocaleString('vi-VN')} ₫`
         : `🏆 +${ach.rewardGems} Ngọc`,
       'gem'
     );
+
     setFarm((prev) => {
       if (!prev) return prev;
-      const marked = {
+      let nextPigs = prev.pigs;
+      let nextStored = prev.storedPigs || [];
+      let nextUnlocked = prev.unlockedBreeds;
+
+      if (rewardBreedId) {
+        const yardRoom = prev.pigs.length < prev.barnCapacity;
+        const bagRoom = nextStored.length < MAX_STORED_PIGS;
+        if (!yardRoom && !bagRoom) return prev;
+
+        const rewardPig = createPigInstance(rewardBreedId, { growth: 20 });
+        if (yardRoom) {
+          nextPigs = [...prev.pigs, rewardPig];
+        } else {
+          nextStored = [...nextStored, rewardPig];
+        }
+        if (!nextUnlocked.includes(rewardBreedId)) {
+          nextUnlocked = [...nextUnlocked, rewardBreedId];
+        }
+      }
+
+      const marked: FarmState = {
         ...prev,
+        pigs: nextPigs,
+        storedPigs: nextStored,
+        unlockedBreeds: nextUnlocked,
         achievements: prev.achievements.map((a) =>
           a.id === achievementId ? { ...a, claimed: true } : a
         ),
@@ -1410,7 +1586,7 @@ export default function App() {
     const canFree = Date.now() - farm.lastWheelSpinAt > 1000 * 60 * 5;
     if (!canFree && farm.coins < 120) return null;
 
-    const rarePool = PIG_BREEDS.filter((b) => b.rarity === 'rare');
+    const rarePool = PIG_BREEDS.filter((b) => b.rarity === 'rare' && !b.achievementOnly);
     const chosenRare = rarePool[Math.floor(Math.random() * rarePool.length)] || PIG_BREEDS[0];
 
     // Matches WHEEL_SLICES indices (0: Rare Pig, 1..5: Gold Coins)
@@ -1801,7 +1977,12 @@ export default function App() {
   }, []);
 
   const handleCoupleBreed = (myPigId: string, partnerPigId: string) => {
-    if (!farm || farm.coins < 50 || farm.pigs.length >= farm.barnCapacity) return;
+    if (!farm || farm.coins < 50) return;
+    const canPutInYard = farm.pigs.length < farm.barnCapacity;
+    if (!canPutInYard && (farm.storedPigs?.length || 0) >= MAX_STORED_PIGS) {
+      pushFeedback(50, 42, 'Chuồng và Túi Đồ đều đã đầy!', 'warn');
+      return;
+    }
     const partner = farm.neighbors.find((n) => n.isPartner) || farm.neighbors[0];
     const myPig = farm.pigs.find((p) => p.id === myPigId);
     const partnerPig = partner?.pigs.find((p) => p.id === partnerPigId);
@@ -1819,7 +2000,9 @@ export default function App() {
     pushFeedback(
       50,
       42,
-      isRareHatch
+      !canPutInYard
+        ? `🎒 Chuồng đầy — đã đưa ${childBreed.name} vào Túi Đồ! (+5 💕)`
+        : isRareHatch
         ? `🌟 TRÚNG HIẾM! Lai đôi ra ${childBreed.name}!`
         : `Lai đôi thành công: ${childBreed.name}! (+5 💕)`,
       'gem'
@@ -1830,6 +2013,7 @@ export default function App() {
 
     setFarm((prev) => {
       if (!prev) return prev;
+      const putInYard = prev.pigs.length < prev.barnCapacity;
       const unlocked = prev.unlockedBreeds.includes(childBreedId)
         ? prev.unlockedBreeds
         : [...prev.unlockedBreeds, childBreedId];
@@ -1837,25 +2021,14 @@ export default function App() {
         ...prev,
         coins: prev.coins - 50,
         lovePoints: prev.lovePoints + 5,
-        pigs: [...prev.pigs, baby],
+        pigs: putInYard ? [...prev.pigs, baby] : prev.pigs,
+        storedPigs: putInYard ? prev.storedPigs : [...(prev.storedPigs || []), baby],
         unlockedBreeds: unlocked,
         totalBred: prev.totalBred + 1,
       };
       updated = addXpAndCoins(updated, 0, 50);
       updated = bumpQuest(updated, 'breed', 1);
-      updated = {
-        ...updated,
-        achievements: updated.achievements.map((a) => {
-          if (a.id.startsWith('ach_collector')) {
-            return { ...a, progress: unlocked.length, unlocked: unlocked.length >= a.target };
-          }
-          if (a.id === 'ach_breeder') {
-            return { ...a, progress: updated.totalBred, unlocked: updated.totalBred >= a.target };
-          }
-          return a;
-        }),
-      };
-      return updated;
+      return syncAchievements(updated);
     });
   };
 
@@ -1943,6 +2116,492 @@ export default function App() {
     }
   };
 
+  // --- CROP FARM (25 plots & 25 seeds) HANDLERS ---
+  const handlePlantSeed = (plotIndex: number, seedId: string) => {
+    if (!farm) return;
+    const unlockedCount = getUnlockedPlotCount(farm.level);
+    if (plotIndex < 0 || plotIndex >= unlockedCount) return;
+
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const target = plots[plotIndex];
+    if (!target || target.seedId) return;
+
+    const seed = CROP_SEED_MAP[seedId];
+    if (!seed) return;
+    if (farm.level < seed.unlockLevel) {
+      pushFeedback(50, 35, `Cần đạt Lv.${seed.unlockLevel} để trồng ${seed.name}!`, 'warn');
+      return;
+    }
+    if (farm.coins < seed.seedPrice) {
+      pushFeedback(50, 35, `Chưa đủ Xu! Cần ${seed.seedPrice} ₫`, 'warn');
+      return;
+    }
+
+    const now = Date.now();
+    soundFx.playClick();
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      if (basePlots[plotIndex]?.seedId || prev.coins < seed.seedPrice) return prev;
+      const nextPlots = basePlots.map((p) =>
+        p.index === plotIndex
+          ? {
+              ...p,
+              seedId: seed.id,
+              plantedAt: now,
+              lastUpdatedAt: now,
+              growthMs: 0,
+              watered: false,
+              fertilizedCount: 0,
+            }
+          : p
+      );
+      return syncAchievements({
+        ...prev,
+        coins: prev.coins - seed.seedPrice,
+        cropPlots: nextPlots,
+        totalCropsPlanted: (prev.totalCropsPlanted || 0) + 1,
+      });
+    });
+  };
+
+  const handleWaterPlot = (plotIndex: number) => {
+    if (!farm) return;
+    const now = Date.now();
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const plot = plots[plotIndex];
+    if (!plot || !plot.seedId || plot.watered) return;
+    soundFx.playWater();
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      return {
+        ...prev,
+        cropPlots: basePlots.map((p) => {
+          if (p.index !== plotIndex || !p.seedId || p.watered) return p;
+          const prog = computePlotProgress(p, now);
+          return {
+            ...p,
+            growthMs: prog.effectiveElapsedMs,
+            lastUpdatedAt: now,
+            watered: true,
+          };
+        }),
+      };
+    });
+  };
+
+  const handleWaterAllPlots = () => {
+    if (!farm) return;
+    const now = Date.now();
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const hasDry = plots.some((p) => p.seedId && !p.watered && !computePlotProgress(p, now).isReady);
+    if (!hasDry) return;
+    soundFx.playWater();
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      return {
+        ...prev,
+        cropPlots: basePlots.map((p) => {
+          if (!p.seedId || p.watered) return p;
+          const prog = computePlotProgress(p, now);
+          if (prog.isReady) return p;
+          return {
+            ...p,
+            growthMs: prog.effectiveElapsedMs,
+            lastUpdatedAt: now,
+            watered: true,
+          };
+        }),
+      };
+    });
+  };
+
+  const handleFertilizePlot = (plotIndex: number) => {
+    if (!farm) return;
+    if ((farm.fertilizerCount ?? 0) <= 0) {
+      pushFeedback(50, 35, 'Hết Phân Bón! Mua thêm hoặc dọn phân heo để nhặt miễn phí', 'warn');
+      return;
+    }
+    const now = Date.now();
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const plot = plots[plotIndex];
+    if (!plot || !plot.seedId) return;
+    const prog = computePlotProgress(plot, now);
+    if (prog.isReady) return;
+
+    soundFx.playChest();
+    setFarm((prev) => {
+      if (!prev || (prev.fertilizerCount ?? 0) <= 0) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      const target = basePlots[plotIndex];
+      if (!target || !target.seedId) return prev;
+      const curProg = computePlotProgress(target, now);
+      if (curProg.isReady) return prev;
+      const boostMs = curProg.totalMs * 0.5;
+      return {
+        ...prev,
+        fertilizerCount: (prev.fertilizerCount ?? 0) - 1,
+        cropPlots: basePlots.map((p) =>
+          p.index === plotIndex
+            ? {
+                ...p,
+                growthMs: Math.min(curProg.totalMs, curProg.effectiveElapsedMs + boostMs),
+                lastUpdatedAt: now,
+                fertilizedCount: (p.fertilizedCount || 0) + 1,
+              }
+            : p
+        ),
+      };
+    });
+  };
+
+  const handleFertilizeAllPlots = () => {
+    if (!farm) return;
+    const available = farm.fertilizerCount ?? 0;
+    if (available <= 0) {
+      pushFeedback(50, 35, 'Hết Phân Bón! Mua thêm hoặc dọn phân heo để nhặt miễn phí', 'warn');
+      return;
+    }
+    const now = Date.now();
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const growing = plots
+      .filter((p) => p.seedId && !computePlotProgress(p, now).isReady)
+      .sort((a, b) => (a.fertilizedCount || 0) - (b.fertilizedCount || 0));
+
+    if (growing.length === 0) {
+      pushFeedback(50, 35, 'Không có cây đang lớn để bón phân!', 'warn');
+      return;
+    }
+
+    const targets = growing.slice(0, available);
+    const targetIndices = new Set(targets.map((t) => t.index));
+    soundFx.playChest();
+    pushFeedback(50, 32, `🧪 Đã bón phân nhanh cho ${targets.length} ô cây (-50% thời gian)!`, 'heal');
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const curAvail = prev.fertilizerCount ?? 0;
+      if (curAvail <= 0) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      let used = 0;
+      const nextPlots = basePlots.map((p) => {
+        if (!targetIndices.has(p.index) || !p.seedId || used >= curAvail) return p;
+        const curProg = computePlotProgress(p, now);
+        if (curProg.isReady) return p;
+        used += 1;
+        return {
+          ...p,
+          growthMs: Math.min(curProg.totalMs, curProg.effectiveElapsedMs + curProg.totalMs * 0.5),
+          lastUpdatedAt: now,
+          fertilizedCount: (p.fertilizedCount || 0) + 1,
+        };
+      });
+      if (used === 0) return prev;
+      return {
+        ...prev,
+        fertilizerCount: Math.max(0, curAvail - used),
+        cropPlots: nextPlots,
+      };
+    });
+  };
+
+  const handleHarvestPlot = (plotIndex: number) => {
+    if (!farm) return;
+    const now = Date.now();
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const plot = plots[plotIndex];
+    if (!plot || !plot.seedId) return;
+    const prog = computePlotProgress(plot, now);
+    if (!prog.isReady) return;
+
+    const seed = CROP_SEED_MAP[plot.seedId] || CROP_SEEDS[0];
+    const gainedCoins = seed.harvestCoins * seed.harvestYield;
+    const gainedXp = seed.harvestXp * seed.harvestYield;
+
+    soundFx.playCoin();
+    pushFeedback(50, 32, `🧺 Thu hoạch ${seed.name} ×${seed.harvestYield}! +${gainedCoins} ₫ · +${gainedXp} XP`, 'coin');
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      const nextPlots = basePlots.map((p) =>
+        p.index === plotIndex
+          ? {
+              index: p.index,
+              seedId: null,
+              plantedAt: 0,
+              lastUpdatedAt: 0,
+              growthMs: 0,
+              watered: false,
+              fertilizedCount: 0,
+            }
+          : p
+      );
+      const nextStorage = {
+        ...(prev.cropStorage || {}),
+        [seed.id]: ((prev.cropStorage || {})[seed.id] || 0) + seed.harvestYield,
+      };
+      return addXpAndCoins(
+        {
+          ...prev,
+          cropPlots: nextPlots,
+          cropStorage: nextStorage,
+          totalCropsHarvested: (prev.totalCropsHarvested || 0) + 1,
+        },
+        gainedCoins,
+        gainedXp
+      );
+    });
+  };
+
+  const handleHarvestAllPlots = () => {
+    if (!farm) return;
+    const now = Date.now();
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const readyPlots = plots.filter((p) => p.seedId && computePlotProgress(p, now).isReady);
+    if (readyPlots.length === 0) return;
+
+    let totalCoins = 0;
+    let totalXp = 0;
+    const harvestedMap: Record<string, number> = {};
+    for (const p of readyPlots) {
+      if (!p.seedId) continue;
+      const seed = CROP_SEED_MAP[p.seedId] || CROP_SEEDS[0];
+      totalCoins += seed.harvestCoins * seed.harvestYield;
+      totalXp += seed.harvestXp * seed.harvestYield;
+      harvestedMap[seed.id] = (harvestedMap[seed.id] || 0) + seed.harvestYield;
+    }
+
+    soundFx.playChest();
+    pushFeedback(50, 32, `🧺 Thu hoạch ${readyPlots.length} ô! +${totalCoins.toLocaleString('vi-VN')} ₫ · +${totalXp} XP`, 'gem');
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      const readyIndices = new Set(readyPlots.map((rp) => rp.index));
+      const nextPlots = basePlots.map((p) =>
+        readyIndices.has(p.index)
+          ? {
+              index: p.index,
+              seedId: null,
+              plantedAt: 0,
+              lastUpdatedAt: 0,
+              growthMs: 0,
+              watered: false,
+              fertilizedCount: 0,
+            }
+          : p
+      );
+      const nextStorage = { ...(prev.cropStorage || {}) };
+      for (const [sid, qty] of Object.entries(harvestedMap)) {
+        nextStorage[sid] = (nextStorage[sid] || 0) + qty;
+      }
+      return addXpAndCoins(
+        {
+          ...prev,
+          cropPlots: nextPlots,
+          cropStorage: nextStorage,
+          totalCropsHarvested: (prev.totalCropsHarvested || 0) + readyPlots.length,
+        },
+        totalCoins,
+        totalXp
+      );
+    });
+  };
+
+  const handleUprootPlot = (plotIndex: number) => {
+    if (!farm) return;
+    const plots = farm.cropPlots || createInitialCropPlots();
+    const plot = plots[plotIndex];
+    if (!plot || !plot.seedId) return;
+    soundFx.playSweep();
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const basePlots = prev.cropPlots || createInitialCropPlots();
+      return {
+        ...prev,
+        cropPlots: basePlots.map((p) =>
+          p.index === plotIndex
+            ? {
+                index: p.index,
+                seedId: null,
+                plantedAt: 0,
+                lastUpdatedAt: 0,
+                growthMs: 0,
+                watered: false,
+                fertilizedCount: 0,
+              }
+            : p
+        ),
+      };
+    });
+  };
+
+  const handleBuyFertilizer = (qty: number) => {
+    if (!farm || qty <= 0) return;
+    const cost = FERTILIZER_PRICE * qty;
+    if (farm.coins < cost) return;
+    soundFx.playCoin();
+    setFarm((prev) => {
+      if (!prev || prev.coins < cost) return prev;
+      return {
+        ...prev,
+        coins: prev.coins - cost,
+        fertilizerCount: (prev.fertilizerCount ?? 0) + qty,
+      };
+    });
+  };
+
+  const handleConvertCropToFeed = (seedId: string, qty: number) => {
+    if (!farm || qty <= 0) return;
+    const owned = (farm.cropStorage || {})[seedId] || 0;
+    if (owned < qty) return;
+    const seed = CROP_SEED_MAP[seedId] || CROP_SEEDS[0];
+    const standardGain = seed.feedYield * qty;
+    const deluxeGain = seed.feedYield >= 6 ? qty : 0;
+
+    soundFx.playOink();
+    pushFeedback(50, 35, `🥣 Ép ${seed.name}: +${standardGain} Cám${deluxeGain ? ` · +${deluxeGain} Bánh` : ''}`, 'love');
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const curOwned = (prev.cropStorage || {})[seedId] || 0;
+      if (curOwned < qty) return prev;
+      return syncAchievements({
+        ...prev,
+        cropStorage: {
+          ...(prev.cropStorage || {}),
+          [seedId]: Math.max(0, curOwned - qty),
+        },
+        inventory: {
+          ...prev.inventory,
+          feed_standard: (prev.inventory['feed_standard'] || 0) + standardGain,
+          feed_deluxe: (prev.inventory['feed_deluxe'] || 0) + deluxeGain,
+        },
+        totalCropsConvertedToFeed: (prev.totalCropsConvertedToFeed || 0) + qty,
+      });
+    });
+  };
+
+  const handleConvertAllCropsToFeed = () => {
+    if (!farm) return;
+    const entries = Object.entries(farm.cropStorage || {}).filter(([, q]) => q > 0);
+    if (entries.length === 0) return;
+
+    let totalStandard = 0;
+    let totalDeluxe = 0;
+    let totalConvertedQty = 0;
+    for (const [seedId, qty] of entries) {
+      const seed = CROP_SEED_MAP[seedId] || CROP_SEEDS[0];
+      totalStandard += seed.feedYield * qty;
+      if (seed.feedYield >= 6) totalDeluxe += qty;
+      totalConvertedQty += qty;
+    }
+
+    soundFx.playOink();
+    pushFeedback(50, 35, `🐷 Đổi tất cả nông sản thành +${totalStandard} Cám${totalDeluxe ? ` & +${totalDeluxe} Bánh` : ''}!`, 'love');
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      return syncAchievements({
+        ...prev,
+        cropStorage: {},
+        inventory: {
+          ...prev.inventory,
+          feed_standard: (prev.inventory['feed_standard'] || 0) + totalStandard,
+          feed_deluxe: (prev.inventory['feed_deluxe'] || 0) + totalDeluxe,
+        },
+        totalCropsConvertedToFeed: (prev.totalCropsConvertedToFeed || 0) + totalConvertedQty,
+      });
+    });
+  };
+
+  const handleSellCrop = (seedId: string, qty: number) => {
+    if (!farm || qty <= 0) return;
+    const owned = (farm.cropStorage || {})[seedId] || 0;
+    const sellQty = Math.min(owned, qty);
+    if (sellQty <= 0) return;
+    const seed = CROP_SEED_MAP[seedId] || CROP_SEEDS[0];
+    const coinsGained = seed.harvestCoins * sellQty;
+    soundFx.playCoin();
+    pushFeedback(50, 35, `💰 Bán ${seed.name} ×${sellQty}: +${coinsGained.toLocaleString('vi-VN')} ₫`, 'coin');
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const curOwned = (prev.cropStorage || {})[seedId] || 0;
+      const actualSell = Math.min(curOwned, sellQty);
+      if (actualSell <= 0) return prev;
+      return addXpAndCoins(
+        {
+          ...prev,
+          cropStorage: {
+            ...(prev.cropStorage || {}),
+            [seedId]: Math.max(0, curOwned - actualSell),
+          },
+        },
+        seed.harvestCoins * actualSell,
+        0
+      );
+    });
+  };
+
+  const handleCompleteOrder = (orderId: string) => {
+    if (!farm) return;
+    const orders = farm.cropOrders || createInitialCropOrders(farm.level);
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+    const storage = farm.cropStorage || {};
+    const canFulfill = order.items.every((req) => (storage[req.seedId] || 0) >= req.qty);
+    if (!canFulfill) return;
+
+    soundFx.playChest();
+    pushFeedback(
+      50,
+      32,
+      `🚚 Giao thành công! +${order.rewardCoins.toLocaleString('vi-VN')} ₫ · +${order.rewardXp} XP · +${order.rewardGems} 💎`,
+      'gem'
+    );
+
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const nextStorage = { ...(prev.cropStorage || {}) };
+      for (const req of order.items) {
+        if ((nextStorage[req.seedId] || 0) < req.qty) return prev;
+        nextStorage[req.seedId] = Math.max(0, (nextStorage[req.seedId] || 0) - req.qty);
+      }
+      const nextOrders = (prev.cropOrders || []).map((o) =>
+        o.id === orderId ? generateCropOrder(prev.level) : o
+      );
+      return addXpAndCoins(
+        {
+          ...prev,
+          cropStorage: nextStorage,
+          cropOrders: nextOrders,
+          totalOrdersCompleted: (prev.totalOrdersCompleted || 0) + 1,
+        },
+        order.rewardCoins,
+        order.rewardXp,
+        order.rewardGems
+      );
+    });
+  };
+
+  const handleRefreshOrder = (orderId: string) => {
+    if (!farm) return;
+    soundFx.playClick();
+    setFarm((prev) => {
+      if (!prev) return prev;
+      const baseOrders = prev.cropOrders || createInitialCropOrders(prev.level);
+      return {
+        ...prev,
+        cropOrders: baseOrders.map((o) =>
+          o.id === orderId ? generateCropOrder(prev.level) : o
+        ),
+      };
+    });
+  };
+
   if (!farm) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#5aa340] text-amber-50 font-display text-2xl font-bold">
@@ -1967,6 +2626,16 @@ export default function App() {
   const isGuardDogActive = farm.guardDogActiveUntil > Date.now();
   const xpRequired = farm.level * 100;
   const xpPercent = Math.min(100, Math.round((farm.xp / xpRequired) * 100));
+  const readyCropCount = (() => {
+    const plots = farm.cropPlots;
+    if (!plots) return 0;
+    const nowMs = Date.now();
+    let count = 0;
+    for (const p of plots) {
+      if (p.seedId && computePlotProgress(p, nowMs).isReady) count += 1;
+    }
+    return count;
+  })();
 
   const toolHints: Record<ToolMode, string> = {
     hand: '',
@@ -2180,13 +2849,13 @@ export default function App() {
         </div>
 
         {/* TOP-CENTER: Blue Ribbon Greeting Banner & Vietnam Clock */}
-        <div className="absolute top-1.5 sm:top-2 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1 [@media(max-height:500px)]:gap-0.5 safe-top max-w-[46vw] sm:max-w-[54vw]">
+        <div className="absolute top-1.5 sm:top-2 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1 [@media(max-height:500px)]:gap-0.5 safe-top max-w-[36vw] sm:max-w-[48vw]">
           <div className="flex items-center gap-1 sm:gap-2">
-            <div className="relative px-2.5 sm:px-6 [@media(max-height:500px)]:px-3 py-0.5 sm:py-1 [@media(max-height:500px)]:py-0.5 rounded-xl bg-gradient-to-b from-[#60a5fa] to-[#3b82f6] border-2 border-[#1e40af] shadow-lg flex items-center gap-1.5">
+            <div className="relative px-2 sm:px-6 [@media(max-height:500px)]:px-3 py-0.5 sm:py-1 [@media(max-height:500px)]:py-0.5 rounded-xl bg-gradient-to-b from-[#60a5fa] to-[#3b82f6] border-2 border-[#1e40af] shadow-lg flex items-center gap-1.5">
               {isCoupleLive && currentNeighbor?.isPartner && (
-                <span className="w-2 h-2 rounded-full bg-lime-300 animate-pulse shrink-0" title="Đã kết nối Live" />
+                <span className="w-2 h-2 rounded-full bg-lime-300 shrink-0" title="Đã kết nối Live" />
               )}
-              <span className="font-display font-extrabold text-[11px] sm:text-base [@media(max-height:500px)]:text-xs text-white drop-shadow whitespace-nowrap truncate max-w-[140px] sm:max-w-[260px]">
+              <span className="font-display font-extrabold text-[11px] sm:text-base [@media(max-height:500px)]:text-xs text-white drop-shadow whitespace-nowrap truncate max-w-[96px] sm:max-w-[240px]">
                 {currentNeighbor
                   ? `Thăm: ${currentNeighbor.farmerName}`
                   : farm.farmGreeting}
@@ -2268,10 +2937,10 @@ export default function App() {
           )}
         </div>
 
-        {/* TOP-RIGHT: 2-Device Couple Mode Button */}
+        {/* TOP-RIGHT: 2-Device Couple Mode + 1-Tap Crop Farm Shortcut */}
         <div
           style={{ right: 'max(0.5rem, env(safe-area-inset-right, 0px))' }}
-          className="absolute top-1.5 sm:top-2 z-30 flex items-center gap-1.5 safe-top"
+          className="absolute top-1.5 sm:top-2 z-30 flex flex-col items-end gap-1 safe-top"
         >
           <button
             type="button"
@@ -2286,12 +2955,30 @@ export default function App() {
             }`}
           >
             {isCoupleLive ? (
-              <span className="w-2 h-2 rounded-full bg-lime-200 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-lime-200" />
             ) : (
               <Heart className="w-3.5 h-3.5 fill-pink-100" />
             )}
             <span>{isCoupleLive ? '2 Máy Đang Nối' : 'Chơi 2 Máy'}</span>
             <span className="font-mono-nums text-pink-100">· {farm.lovePoints}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundFx.playClick();
+              setActiveModal('crop_farm');
+            }}
+            title="Lối tắt nhanh vào Nông Trại Trồng Trọt (25 ô đất & 25 hạt giống)"
+            className="relative px-2 sm:px-3 py-1 [@media(max-height:500px)]:py-0.5 rounded-xl border-2 border-[#1f4d13] bg-gradient-to-b from-[#63b334] to-[#3f851b] hover:brightness-110 text-white text-[10px] sm:text-xs font-extrabold flex items-center gap-1 shadow-lg cursor-pointer whitespace-nowrap"
+          >
+            <span>🌾</span>
+            <span>Nông Trại</span>
+            {readyCropCount > 0 && (
+              <span className="px-1.5 py-[1px] rounded-full bg-amber-300 text-amber-950 text-[9px] font-mono-nums font-extrabold leading-none border border-amber-700">
+                {readyCropCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -2371,6 +3058,52 @@ export default function App() {
           </button>
         </div>
 
+        {/* Quick Collect Gifts, Clean Poop & Heal Sick Pigs Buttons (1-tap) */}
+        {(() => {
+          const giftsCount = displayedDrops.filter((d) => d.type !== 'poop').length;
+          const poopsCount = displayedDrops.filter((d) => d.type === 'poop').length;
+          const sickCount = currentNeighbor ? 0 : displayedPigs.filter((p) => p.isSick).length;
+          if (giftsCount === 0 && poopsCount === 0 && sickCount === 0) return null;
+          return (
+            <div
+              style={{ right: 'max(0.75rem, env(safe-area-inset-right, 0px))' }}
+              className="absolute bottom-2.5 sm:bottom-3 z-30 flex items-center sm:flex-col sm:items-end gap-1.5 [@media(max-height:500px)]:scale-90 origin-bottom-right"
+            >
+              {sickCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleHealAll}
+                  title={`Chữa bệnh nhanh cho ${sickCount} chú heo đang ốm (Thuốc còn: ${farm.inventory['medicine_pill'] || 0})`}
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 border-2 border-emerald-950 text-white text-[11px] font-extrabold shadow-lg flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <span>💊</span>
+                  <span>Chữa Bệnh ({sickCount})</span>
+                </button>
+              )}
+              {giftsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleCollectAllGifts}
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 border-2 border-[#6d411c] text-white text-[11px] font-extrabold shadow-lg flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <span>🎁</span>
+                  <span>Thu Quà ({giftsCount})</span>
+                </button>
+              )}
+              {poopsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleCleanAllPoop}
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-700 to-amber-900 hover:brightness-110 border-2 border-amber-300 text-amber-100 text-[11px] font-extrabold shadow-lg flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <span>🧹</span>
+                  <span>Dọn Phân ({poopsCount})</span>
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
         {/* FARM BUILDINGS */}
         <FarmBuildings
           waterLevel={displayedWater}
@@ -2445,7 +3178,7 @@ export default function App() {
               isSick={pig.isSick}
               isBouncing={Boolean(bouncingPigs[pig.id])}
               moodBubble={pig.moodBubble}
-              size={isShortLandscape ? 58 : 76}
+              size={isShortLandscape ? 62 : 80}
               selected={selectedPigId === pig.id}
             />
           </button>
@@ -2528,6 +3261,8 @@ export default function App() {
         }}
         onOpenAchievements={() => {
           soundFx.playClick();
+          setAchievementInitCat('all');
+          setReturnToCropFarm(false);
           setActiveModal('achievements');
         }}
         onOpenQuests={() => {
@@ -2617,7 +3352,15 @@ export default function App() {
       {activeModal === 'achievements' && (
         <AchievementsModal
           state={farm}
-          onClose={() => setActiveModal(null)}
+          initialCategory={achievementInitCat}
+          onClose={() => {
+            if (returnToCropFarm) {
+              setReturnToCropFarm(false);
+              setActiveModal('crop_farm');
+            } else {
+              setActiveModal(null);
+            }
+          }}
           onClaimAchievement={handleClaimAchievement}
         />
       )}
@@ -2725,6 +3468,33 @@ export default function App() {
         />
       )}
 
+      {activeModal === 'crop_farm' && (
+        <CropFarmModal
+          state={farm}
+          onClose={() => setActiveModal(null)}
+          onPlantSeed={handlePlantSeed}
+          onWaterPlot={handleWaterPlot}
+          onWaterAllPlots={handleWaterAllPlots}
+          onFertilizePlot={handleFertilizePlot}
+          onFertilizeAllPlots={handleFertilizeAllPlots}
+          onHarvestPlot={handleHarvestPlot}
+          onHarvestAllPlots={handleHarvestAllPlots}
+          onUprootPlot={handleUprootPlot}
+          onBuyFertilizer={handleBuyFertilizer}
+          onConvertCropToFeed={handleConvertCropToFeed}
+          onConvertAllCropsToFeed={handleConvertAllCropsToFeed}
+          onSellCrop={handleSellCrop}
+          onCompleteOrder={handleCompleteOrder}
+          onRefreshOrder={handleRefreshOrder}
+          onOpenAchievements={() => {
+            soundFx.playClick();
+            setAchievementInitCat('crop_farm');
+            setReturnToCropFarm(true);
+            setActiveModal('achievements');
+          }}
+        />
+      )}
+
       {activeModal === 'settings' && (
         <SettingsModal
           state={farm}
@@ -2758,10 +3528,10 @@ export default function App() {
         />
       )}
 
-      {/* iPhone Portrait-to-Landscape Prompt */}
+      {/* iPhone Portrait-to-Landscape Prompt (lightweight, zero GPU blur/bounce) */}
       {isPortraitMobile && !dismissRotatePrompt && (
-        <div className="fixed inset-0 z-[100] bg-[#2c1b0e]/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center text-amber-50">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center mb-4 animate-bounce">
+        <div className="fixed inset-0 z-[100] bg-[#2c1b0e]/95 flex flex-col items-center justify-center p-6 text-center text-amber-50">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center mb-4">
             <RotateCw className="w-9 h-9 text-amber-300" />
           </div>
           <h2 className="font-display text-2xl font-extrabold text-amber-200 mb-2">

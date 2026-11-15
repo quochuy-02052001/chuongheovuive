@@ -133,7 +133,7 @@ export const FarmBuildings: React.FC<FarmBuildingsProps> = ({
         type="button"
         onClick={onClickDoghouse}
         title="Chuồng Chó Bảo Vệ"
-        className="landscape-compact-building-dog group absolute bottom-[17%] left-[5.5%] z-10 w-[116px] sm:w-[138px] md:w-[156px] cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+        className="landscape-compact-building-dog group absolute bottom-[8%] sm:bottom-[10%] left-[4.5%] z-10 w-[112px] sm:w-[132px] md:w-[150px] cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
       >
         <svg viewBox="0 0 144 124" className="w-full h-auto drop-shadow-md">
           <ellipse cx="74" cy="105" rx="54" ry="11" fill="#5c3618" opacity="0.22" />

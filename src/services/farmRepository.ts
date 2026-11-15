@@ -1,3 +1,4 @@
+import { createInitialCropOrders, createInitialCropPlots, getUnlockedPlotCount } from '../data/cropSeeds';
 import { BREED_MAP, PIG_BREEDS } from '../data/pigBreeds';
 import {
   AchievementItem,
@@ -22,12 +23,20 @@ export function uid(prefix = 'id'): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}`;
 }
 
-const BARN_EXPAND_COSTS: Record<number, number> = {
-  12: 1200,
-  16: 2800,
-  20: 5500,
-  24: 9500,
-};
+export const STARTER_BARN_CAPACITY = 5;
+export const MAX_BARN_CAPACITY = 11;
+
+export interface BarnUpgradeTier {
+  requiredLevel: number;
+  targetCapacity: number;
+  cost: number;
+}
+
+export const BARN_UPGRADE_TIERS: BarnUpgradeTier[] = [
+  { requiredLevel: 10, targetCapacity: 7, cost: 1500 },
+  { requiredLevel: 20, targetCapacity: 9, cost: 3500 },
+  { requiredLevel: 30, targetCapacity: 11, cost: 7000 },
+];
 
 export const MAX_STORED_PIGS = 30;
 export const MAX_STEALS_PER_DAY = 2;
@@ -57,9 +66,40 @@ export function hasAnySavedFarm(): boolean {
   }
 }
 
+export function getMaxBarnCapacityForLevel(level: number): number {
+  let max = STARTER_BARN_CAPACITY;
+  for (const tier of BARN_UPGRADE_TIERS) {
+    if (level >= tier.requiredLevel) {
+      max = tier.targetCapacity;
+    }
+  }
+  return max;
+}
+
+export function getBarnExpandInfo(currentCapacity: number, level: number) {
+  const nextTier = BARN_UPGRADE_TIERS.find((tier) => tier.targetCapacity > currentCapacity);
+  if (!nextTier || currentCapacity >= MAX_BARN_CAPACITY) {
+    return {
+      isMax: true,
+      nextCapacity: MAX_BARN_CAPACITY,
+      increment: 0,
+      requiredLevel: 30,
+      cost: 0,
+      isLevelLocked: false,
+    };
+  }
+  return {
+    isMax: false,
+    nextCapacity: nextTier.targetCapacity,
+    increment: Math.max(1, nextTier.targetCapacity - currentCapacity),
+    requiredLevel: nextTier.requiredLevel,
+    cost: nextTier.cost,
+    isLevelLocked: level < nextTier.requiredLevel,
+  };
+}
+
 export function getBarnExpandCost(currentCapacity: number): number {
-  if (currentCapacity >= 28) return 0;
-  return BARN_EXPAND_COSTS[currentCapacity] ?? 1200 + Math.max(0, Math.floor((currentCapacity - 12) / 4)) * 2600;
+  return getBarnExpandInfo(currentCapacity, 999).cost;
 }
 
 const RARITY_COSTS: Record<string, number> = {
@@ -109,88 +149,9 @@ export function createPigInstance(
   };
 }
 
-function createInitialNeighbors(slot: PartnerSlot): NeighborFarm[] {
-  const isA = slot === 'partner_a';
-  return [
-    {
-      id: 'partner_farm',
-      name: isA ? 'Chuồng Heo Của Em 💕' : 'Chuồng Heo Của Anh 💕',
-      farmerName: isA ? 'Bé Yêu' : 'Anh Yêu',
-      avatarColor: isA ? '#ec4899' : '#0ea5e9',
-      avatarHair: '#292524',
-      level: 5,
-      rank: 1,
-      hearts: 99,
-      greeting: isA ? 'Chuồng của Em nè anh ơi!' : 'Anh đang nuôi heo chờ Em!',
-      waterLevel: 85,
-      helpedToday: false,
-      isPartner: true,
-      storedPigs: [],
-      pigs: isA
-        ? [
-            createPigInstance('sakura_mochi', { growth: 100, x: 35, y: 40 }),
-            createPigInstance('pink_flower', { growth: 85, x: 50, y: 44 }),
-            createPigInstance('strawberry', { growth: 95, x: 64, y: 50 }),
-            createPigInstance('rainbow_parrot', { growth: 100, x: 44, y: 58 }),
-          ]
-        : [
-            createPigInstance('blue_samurai', { growth: 100, x: 34, y: 42 }),
-            createPigInstance('lightning_red', { growth: 92, x: 52, y: 40 }),
-            createPigInstance('tiger_stripe', { growth: 100, x: 64, y: 52 }),
-            createPigInstance('golden_royal', { growth: 88, x: 42, y: 60 }),
-          ],
-      drops: [
-        { id: uid('drop'), type: 'red_cube', x: 42, y: 54, value: 45, createdAt: Date.now() },
-        { id: uid('drop'), type: 'chest', x: 58, y: 64, value: 110, createdAt: Date.now() },
-      ],
-    },
-    {
-      id: 'neighbor_an',
-      name: 'Trại Heo Minh An',
-      farmerName: 'Minh An',
-      avatarColor: '#f59e0b',
-      avatarHair: '#451a03',
-      level: 47,
-      rank: 2,
-      hearts: 312,
-      greeting: 'Chào mừng đến trại hạng nhất!',
-      waterLevel: 85,
-      helpedToday: false,
-      storedPigs: [],
-      pigs: [
-        createPigInstance('lion_dance', { growth: 100, x: 32, y: 42 }),
-        createPigInstance('golden_royal', { growth: 100, x: 48, y: 38 }),
-        createPigInstance('rainbow_parrot', { growth: 85, x: 64, y: 46 }),
-        createPigInstance('blue_samurai', { growth: 100, x: 42, y: 58 }),
-      ],
-      drops: [
-        { id: uid('drop'), type: 'red_cube', x: 36, y: 55, value: 45, createdAt: Date.now() },
-        { id: uid('drop'), type: 'chest', x: 60, y: 64, value: 90, createdAt: Date.now() },
-      ],
-    },
-    {
-      id: 'neighbor_nam',
-      name: 'Nông Trại Hải Nam',
-      farmerName: 'Hải Nam',
-      avatarColor: '#3b82f6',
-      avatarHair: '#1c1917',
-      level: 12,
-      rank: 3,
-      hearts: 42,
-      greeting: 'Mới khởi nghiệp nuôi heo!',
-      waterLevel: 40,
-      helpedToday: false,
-      storedPigs: [],
-      pigs: [
-        createPigInstance('tiger_stripe', { growth: 55, x: 38, y: 45 }),
-        createPigInstance('spotted_milk', { growth: 40, x: 56, y: 48 }),
-        createPigInstance('green_cat', { growth: 75, x: 48, y: 60 }),
-      ],
-      drops: [
-        { id: uid('drop'), type: 'red_cube', x: 44, y: 54, value: 30, createdAt: Date.now() },
-      ],
-    },
-  ];
+function createInitialNeighbors(_slot: PartnerSlot): NeighborFarm[] {
+  // Xóa bạn mặc định, chỉ hiển thị khi kết bạn hoặc kết nối
+  return [];
 }
 
 export function createInitialQuests(): QuestItem[] {
@@ -257,6 +218,32 @@ export function createInitialAchievements(): AchievementItem[] {
   return [
     // Sưu tầm giống
     {
+      id: 'ach_barn_milestone_5',
+      category: 'collection',
+      title: 'Chủ Chuồng Tài Ba 🏆',
+      description: 'Hoàn thành 5 thành tựu Chuồng Heo để nhận ngay giống heo hiếm độc quyền (không thể lai).',
+      progress: 0,
+      target: 5,
+      rewardGems: 15,
+      rewardCoins: 1000,
+      rewardBreedId: 'crystal_trophy',
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_barn_milestone_10',
+      category: 'collection',
+      title: 'Huyền Thoại Chuồng Heo 👑',
+      description: 'Hoàn thành 10 thành tựu Chuồng Heo để nhận ngay giống heo Cực Hiếm độc bản (không thể lai).',
+      progress: 0,
+      target: 10,
+      rewardGems: 40,
+      rewardCoins: 5000,
+      rewardBreedId: 'ruby_emperor',
+      unlocked: false,
+      claimed: false,
+    },
+    {
       id: 'ach_collector_5',
       category: 'collection',
       title: 'Nhà Sưu Tầm Nhí',
@@ -284,9 +271,9 @@ export function createInitialAchievements(): AchievementItem[] {
       id: 'ach_collector_28',
       category: 'collection',
       title: 'Huyền Thoại 28 Giống',
-      description: `Sưu tầm trọn bộ ${PIG_BREEDS.length} giống heo (bao gồm giống lai hiếm).`,
+      description: 'Sưu tầm trọn bộ 28 giống heo cơ bản & lai tạo trong sổ tay.',
       progress: 2,
-      target: PIG_BREEDS.length,
+      target: PIG_BREEDS.filter((b) => !b.achievementOnly).length,
       rewardGems: 50,
       rewardCoins: 3000,
       unlocked: false,
@@ -566,9 +553,9 @@ export function createInitialAchievements(): AchievementItem[] {
       id: 'ach_barn_20',
       category: 'wealth',
       title: 'Chuồng Trại Khang Trang',
-      description: 'Mở rộng sức chứa chuồng lên 20 chỗ.',
-      progress: 12,
-      target: 20,
+      description: 'Mở rộng sức chứa chuồng lên 9 chỗ (đạt Lv.20).',
+      progress: 5,
+      target: 9,
       rewardGems: 10,
       rewardCoins: 800,
       unlocked: false,
@@ -578,9 +565,9 @@ export function createInitialAchievements(): AchievementItem[] {
       id: 'ach_barn_28',
       category: 'wealth',
       title: 'Đại Trang Trại Tối Thượng',
-      description: 'Mở rộng sức chứa chuồng lên mức tối đa (28 chỗ).',
-      progress: 12,
-      target: 28,
+      description: 'Mở rộng sức chứa chuồng lên mức tối đa (11 chỗ ở Lv.30).',
+      progress: 5,
+      target: 11,
       rewardGems: 60,
       rewardCoins: 15000,
       unlocked: false,
@@ -660,11 +647,100 @@ export function createInitialAchievements(): AchievementItem[] {
       unlocked: false,
       claimed: false,
     },
+
+    // Nông Trại Trồng Trọt (5x5 & 25 Hạt Giống)
+    {
+      id: 'ach_crop_plant_10',
+      category: 'crop_farm',
+      title: 'Nông Dân Chăm Chỉ 🌱',
+      description: 'Gieo trồng 10 hạt giống bên Nông Trại.',
+      progress: 0,
+      target: 10,
+      rewardGems: 5,
+      rewardCoins: 350,
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_crop_harvest_25',
+      category: 'crop_farm',
+      title: 'Mùa Màng Bội Thu 🌾',
+      description: 'Thu hoạch 25 ô cây trồng trên cánh đồng.',
+      progress: 0,
+      target: 25,
+      rewardGems: 10,
+      rewardCoins: 900,
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_crop_harvest_100',
+      category: 'crop_farm',
+      title: 'Ông Trùm Cánh Đồng 🚜',
+      description: 'Thu hoạch tổng cộng 100 ô cây trồng bên Nông Trại.',
+      progress: 0,
+      target: 100,
+      rewardGems: 35,
+      rewardCoins: 5500,
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_crop_feed_30',
+      category: 'crop_farm',
+      title: 'Tự Cung Tự Cấp 🥣',
+      description: 'Ép 30 nông sản thành cám dinh dưỡng cho đàn heo.',
+      progress: 0,
+      target: 30,
+      rewardGems: 12,
+      rewardCoins: 1200,
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_crop_orders_5',
+      category: 'crop_farm',
+      title: 'Thương Lái Đắt Hàng 🚚',
+      description: 'Giao thành công 5 đơn hàng nông sản.',
+      progress: 0,
+      target: 5,
+      rewardGems: 18,
+      rewardCoins: 2000,
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_crop_orders_20',
+      category: 'crop_farm',
+      title: 'Chuyến Xe Hạng Sang 📦',
+      description: 'Giao thành công 20 đơn hàng nông sản.',
+      progress: 0,
+      target: 20,
+      rewardGems: 45,
+      rewardCoins: 9500,
+      unlocked: false,
+      claimed: false,
+    },
+    {
+      id: 'ach_crop_plots_25',
+      category: 'crop_farm',
+      title: 'Bá Chủ 25 Ô Đất 🏡',
+      description: 'Đạt Lv.25 để mở khóa trọn vẹn toàn bộ 25 ô đất 5×5.',
+      progress: 5,
+      target: 25,
+      rewardGems: 40,
+      rewardCoins: 8000,
+      unlocked: false,
+      claimed: false,
+    },
   ];
 }
 
 export function syncAchievements(state: FarmState): FarmState {
   const unlockedSet = new Set(state.unlockedBreeds);
+  const standardUnlockedCount = PIG_BREEDS.filter(
+    (b) => !b.achievementOnly && unlockedSet.has(b.id)
+  ).length;
   const rareCount = PIG_BREEDS.filter(
     (b) => b.rarity === 'rare' && unlockedSet.has(b.id)
   ).length;
@@ -678,7 +754,7 @@ export function syncAchievements(state: FarmState): FarmState {
   const progressMap: Record<string, number> = {
     ach_collector_5: state.unlockedBreeds.length,
     ach_collector_14: state.unlockedBreeds.length,
-    ach_collector_28: state.unlockedBreeds.length,
+    ach_collector_28: standardUnlockedCount,
     ach_rare_1: rareCount,
     ach_epic_1: epicCount,
     ach_legend_1: legendCount,
@@ -700,8 +776,8 @@ export function syncAchievements(state: FarmState): FarmState {
     ach_level_5: state.level || 1,
     ach_level_10: state.level || 1,
     ach_level_25: state.level || 1,
-    ach_barn_20: state.barnCapacity || 12,
-    ach_barn_28: state.barnCapacity || 12,
+    ach_barn_20: state.barnCapacity || STARTER_BARN_CAPACITY,
+    ach_barn_28: state.barnCapacity || STARTER_BARN_CAPACITY,
     ach_love_30: state.lovePoints || 0,
     ach_love_100: state.lovePoints || 0,
     ach_love_500: state.lovePoints || 0,
@@ -709,16 +785,37 @@ export function syncAchievements(state: FarmState): FarmState {
     ach_wheel_50: state.totalWheelSpins || 0,
     ach_thief_5: state.totalStolen || 0,
     ach_thief_20: state.totalStolen || 0,
+    ach_crop_plant_10: state.totalCropsPlanted || 0,
+    ach_crop_harvest_25: state.totalCropsHarvested || 0,
+    ach_crop_harvest_100: state.totalCropsHarvested || 0,
+    ach_crop_feed_30: state.totalCropsConvertedToFeed || 0,
+    ach_crop_orders_5: state.totalOrdersCompleted || 0,
+    ach_crop_orders_20: state.totalOrdersCompleted || 0,
+    ach_crop_plots_25: getUnlockedPlotCount(state.level || 1),
   };
+
+  const firstPass = state.achievements.map((a) => {
+    if (a.rewardBreedId) return a;
+    const nextProgress = progressMap[a.id] ?? a.progress;
+    return {
+      ...a,
+      progress: nextProgress,
+      unlocked: a.unlocked || nextProgress >= a.target,
+    };
+  });
+
+  const completedBarnAchievements = firstPass.filter(
+    (a) => (a.category || 'collection') !== 'crop_farm' && !a.rewardBreedId && a.unlocked
+  ).length;
 
   return {
     ...state,
-    achievements: state.achievements.map((a) => {
-      const nextProgress = progressMap[a.id] ?? a.progress;
+    achievements: firstPass.map((a) => {
+      if (!a.rewardBreedId) return a;
       return {
         ...a,
-        progress: nextProgress,
-        unlocked: a.unlocked || nextProgress >= a.target,
+        progress: completedBarnAchievements,
+        unlocked: a.unlocked || completedBarnAchievements >= a.target,
       };
     }),
   };
@@ -744,21 +841,17 @@ export function createDefaultFarmState(slot: PartnerSlot = 'partner_a'): FarmSta
   const isA = slot === 'partner_a';
   const starterPigs: PigInstance[] = isA
     ? [
-        createPigInstance('pink_flower', { growth: 62, x: 34, y: 38, nickname: 'Bé Đào' }),
-        createPigInstance('spotted_milk', { growth: 48, x: 52, y: 42, nickname: 'Bò Sữa' }),
-        createPigInstance('pink_flower', { growth: 25, x: 43, y: 54, nickname: 'Hồng Nhi' }),
+        createPigInstance('pink_flower', { growth: 55, x: 36, y: 40, nickname: 'Bé Đào' }),
+        createPigInstance('spotted_milk', { growth: 35, x: 54, y: 46, nickname: 'Bò Sữa' }),
       ]
     : [
-        createPigInstance('pink_flower', { growth: 65, x: 35, y: 39, nickname: 'Bánh Mochi' }),
-        createPigInstance('spotted_milk', { growth: 50, x: 54, y: 44, nickname: 'Cà Phê Sữa' }),
-        createPigInstance('spotted_milk', { growth: 28, x: 44, y: 55 }),
+        createPigInstance('pink_flower', { growth: 55, x: 36, y: 40, nickname: 'Bánh Mochi' }),
+        createPigInstance('spotted_milk', { growth: 35, x: 54, y: 46, nickname: 'Cà Phê Sữa' }),
       ];
 
   const starterDrops: YardDrop[] = [
-    { id: uid('drop'), type: 'red_cube', x: 41, y: 38, value: 30, createdAt: Date.now() },
-    { id: uid('drop'), type: 'red_cube', x: 56, y: 48, value: 30, createdAt: Date.now() },
-    { id: uid('drop'), type: 'red_cube', x: 37, y: 58, value: 35, createdAt: Date.now() },
-    { id: uid('drop'), type: 'chest', x: 60, y: 66, value: 130, createdAt: Date.now() },
+    { id: uid('drop'), type: 'red_cube', x: 42, y: 40, value: 30, createdAt: Date.now() },
+    { id: uid('drop'), type: 'chest', x: 58, y: 62, value: 110, createdAt: Date.now() },
   ];
 
   const unlocked = Array.from(new Set(starterPigs.map((p) => p.breedId)));
@@ -773,9 +866,9 @@ export function createDefaultFarmState(slot: PartnerSlot = 'partner_a'): FarmSta
     farmGreeting: isA ? 'Chuồng Heo Của Anh 💕' : 'Chuồng Heo Của Em 💕',
     level: 1,
     xp: 0,
-    coins: 520,
+    coins: 480,
     gems: 10,
-    barnCapacity: 12,
+    barnCapacity: 5,
     waterLevel: 90,
     guardDogActiveUntil: Date.now() + 1000 * 60 * 30,
     soundEnabled: true,
@@ -784,10 +877,10 @@ export function createDefaultFarmState(slot: PartnerSlot = 'partner_a'): FarmSta
     breedingIncubators: [],
     drops: starterDrops,
     inventory: {
-      feed_standard: 12,
+      feed_standard: 10,
       feed_deluxe: 2,
-      medicine_pill: 3,
-      vitamin_boost: 2,
+      medicine_pill: 2,
+      vitamin_boost: 1,
       breed_charm: 1,
     },
     unlockedBreeds: unlocked,
@@ -807,6 +900,14 @@ export function createDefaultFarmState(slot: PartnerSlot = 'partner_a'): FarmSta
     lastWheelSpinAt: 0,
     lastTickAt: Date.now(),
     lastQuestResetDate: getVietnamDateKey(),
+    cropPlots: createInitialCropPlots(),
+    cropStorage: {},
+    fertilizerCount: 3,
+    cropOrders: createInitialCropOrders(1),
+    totalCropsPlanted: 0,
+    totalCropsHarvested: 0,
+    totalOrdersCompleted: 0,
+    totalCropsConvertedToFeed: 0,
   };
 }
 
@@ -855,10 +956,17 @@ function loadRawSlot(slot: PartnerSlot): FarmState | null {
       ? baseNeighbors.map((n) => ({ ...n, helpedToday: false }))
       : baseNeighbors;
 
+    const levelAllowedCapacity = getMaxBarnCapacityForLevel(parsed.level || 1);
+    const normalizedBarnCapacity = Math.min(
+      Math.max(levelAllowedCapacity, parsed.pigs.length),
+      Math.max(STARTER_BARN_CAPACITY, parsed.barnCapacity || STARTER_BARN_CAPACITY)
+    );
+
     const merged = applyOfflineProgress({
       ...defaults,
       ...parsed,
       slot,
+      barnCapacity: normalizedBarnCapacity,
       roomCode: parsed.roomCode || defaults.roomCode,
       stealsToday: isNewDay ? 0 : parsed.stealsToday || 0,
       totalStolen: parsed.totalStolen || 0,
@@ -868,6 +976,20 @@ function loadRawSlot(slot: PartnerSlot): FarmState | null {
       achievements: mergeAchievements(parsed.achievements),
       neighbors: nextNeighbors,
       lastQuestResetDate: todayVnKey,
+      cropPlots:
+        Array.isArray(parsed.cropPlots) && parsed.cropPlots.length === 25
+          ? parsed.cropPlots
+          : createInitialCropPlots(),
+      cropStorage: parsed.cropStorage && typeof parsed.cropStorage === 'object' ? parsed.cropStorage : {},
+      fertilizerCount: typeof parsed.fertilizerCount === 'number' ? parsed.fertilizerCount : 3,
+      cropOrders:
+        Array.isArray(parsed.cropOrders) && parsed.cropOrders.length > 0
+          ? parsed.cropOrders
+          : createInitialCropOrders(parsed.level || 1),
+      totalCropsPlanted: parsed.totalCropsPlanted || 0,
+      totalCropsHarvested: parsed.totalCropsHarvested || 0,
+      totalOrdersCompleted: parsed.totalOrdersCompleted || 0,
+      totalCropsConvertedToFeed: parsed.totalCropsConvertedToFeed || 0,
     });
     return syncAchievements(merged);
   } catch {
@@ -1106,12 +1228,32 @@ class LocalFarmRepository implements FarmRepository {
       throw new Error('Dữ liệu sao lưu không hợp lệ.');
     }
     const slot = this.getActiveSlot();
+    const levelAllowedCapacity = getMaxBarnCapacityForLevel(parsed.level || 1);
+    const normalizedBarnCapacity = Math.min(
+      Math.max(levelAllowedCapacity, parsed.pigs.length),
+      Math.max(STARTER_BARN_CAPACITY, parsed.barnCapacity || STARTER_BARN_CAPACITY)
+    );
     return syncAchievements({
       ...createDefaultFarmState(slot),
       ...parsed,
       slot,
+      barnCapacity: normalizedBarnCapacity,
       achievements: mergeAchievements(parsed.achievements),
       lastTickAt: Date.now(),
+      cropPlots:
+        Array.isArray(parsed.cropPlots) && parsed.cropPlots.length === 25
+          ? parsed.cropPlots
+          : createInitialCropPlots(),
+      cropStorage: parsed.cropStorage && typeof parsed.cropStorage === 'object' ? parsed.cropStorage : {},
+      fertilizerCount: typeof parsed.fertilizerCount === 'number' ? parsed.fertilizerCount : 3,
+      cropOrders:
+        Array.isArray(parsed.cropOrders) && parsed.cropOrders.length > 0
+          ? parsed.cropOrders
+          : createInitialCropOrders(parsed.level || 1),
+      totalCropsPlanted: parsed.totalCropsPlanted || 0,
+      totalCropsHarvested: parsed.totalCropsHarvested || 0,
+      totalOrdersCompleted: parsed.totalOrdersCompleted || 0,
+      totalCropsConvertedToFeed: parsed.totalCropsConvertedToFeed || 0,
     });
   }
 }

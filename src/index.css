@@ -154,41 +154,49 @@
     display: none;
   }
   .landscape-compact-cabinet {
-    width: 86px !important;
+    width: 82px !important;
   }
   .landscape-compact-card {
-    height: 56px !important;
-    width: 68px !important;
+    height: 58px !important;
+    width: 72px !important;
   }
   .landscape-compact-building-oven {
-    width: 112px !important;
-    top: 12% !important;
-    left: 6.5% !important;
+    width: 108px !important;
+    top: 11% !important;
+    left: 5% !important;
   }
   .landscape-compact-building-well {
-    width: 80px !important;
-    top: 40% !important;
-    left: 6.5% !important;
+    width: 78px !important;
+    top: 41% !important;
+    left: 5.5% !important;
   }
   .landscape-compact-building-dog {
-    width: 88px !important;
-    bottom: 8% !important;
-    left: 7% !important;
+    width: 84px !important;
+    bottom: 5% !important;
+    left: 6% !important;
   }
   .landscape-compact-building-barn {
-    width: 138px !important;
-    top: 9% !important;
-    right: 4% !important;
+    width: 132px !important;
+    top: 8% !important;
+    right: 3.5% !important;
   }
   .landscape-compact-building-trough {
-    width: 46px !important;
-    top: 45% !important;
-    right: 6.5% !important;
+    width: 44px !important;
+    top: 44% !important;
+    right: 6% !important;
   }
   .landscape-compact-building-post {
-    width: 34px !important;
-    top: 50% !important;
+    width: 32px !important;
+    top: 48% !important;
   }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Custom subtle scrollbar for modals */

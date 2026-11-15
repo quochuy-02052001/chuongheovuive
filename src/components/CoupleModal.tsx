@@ -752,7 +752,11 @@ export const CoupleModal: React.FC<CoupleModalProps> = ({
                         </select>
                         <button
                           type="button"
-                          disabled={state.coins < 50 || state.pigs.length >= state.barnCapacity}
+                          disabled={
+                            state.coins < 50 ||
+                            (state.pigs.length >= state.barnCapacity &&
+                              (state.storedPigs?.length || 0) >= 30)
+                          }
                           onClick={() => {
                             onCoupleBreed(myBreedPigId, partnerBreedPigId);
                             onClose();

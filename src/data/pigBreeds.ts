@@ -407,6 +407,37 @@ export const PIG_BREEDS: PigBreed[] = [
     earColor: '#b45309',
     pattern: 'dragon_gold',
   },
+  // --- GIỐNG HIẾM ĐỘC QUYỀN THÀNH TỰU (KHÔNG THỂ LAI HOẶC MUA) ---
+  {
+    id: 'crystal_trophy',
+    name: 'Heo Pha Lê Danh Dự',
+    rarity: 'rare',
+    buyPrice: 0,
+    achievementOnly: true,
+    sellPrice: 3600,
+    growthDurationSec: 150,
+    description: 'Giống heo pha lê ngọc lam lấp lánh, chỉ trao tặng khi hoàn thành mốc Thành Tựu Chuồng Heo.',
+    trait: 'Độc quyền Thành Tựu — không thể lai tạo',
+    bodyColor: '#67e8f9',
+    bellyColor: '#ecfeff',
+    earColor: '#0891b2',
+    pattern: 'trophy_crystal',
+  },
+  {
+    id: 'ruby_emperor',
+    name: 'Heo Hoàng Đế Hồng Ngọc',
+    rarity: 'legendary',
+    buyPrice: 0,
+    achievementOnly: true,
+    sellPrice: 9500,
+    growthDurationSec: 185,
+    description: 'Bá chủ vương triều hồng ngọc với vương miện ruby và áo choàng hoàng gia — phần thưởng cao quý nhất của Chuồng Heo.',
+    trait: 'Tuyệt tác Thành Tựu — không thể lai tạo',
+    bodyColor: '#f43f5e',
+    bellyColor: '#ffe4e6',
+    earColor: '#9f1239',
+    pattern: 'emperor_ruby',
+  },
 ];
 
 export const BREED_MAP: Record<string, PigBreed> = Object.fromEntries(
@@ -420,6 +451,16 @@ export const RARITY_LABELS: Record<PigBreed['rarity'], { label: string; color: s
   epic: { label: 'Sử Thi (Lai)', color: '#7e22ce', bg: '#f3e8ff' },
   legendary: { label: 'Cực Hiếm (Lai)', color: '#b45309', bg: '#fef3c7' },
 };
+
+export function getBreedRarityBadge(breed: PigBreed): { label: string; color: string; bg: string } {
+  if (breed.achievementOnly) {
+    if (breed.rarity === 'legendary') {
+      return { label: 'Cực Hiếm · Thành Tựu (Không Lai)', color: '#9f1239', bg: '#ffe4e6' };
+    }
+    return { label: 'Hiếm · Thành Tựu (Không Lai)', color: '#0e7490', bg: '#cffafe' };
+  }
+  return RARITY_LABELS[breed.rarity];
+}
 
 export const SHOP_SUPPLIES: InventoryItem[] = [
   {
@@ -542,16 +583,72 @@ export const BREEDING_RECIPES: BreedingPairResult[] = [
 
 export const BASE_RARE_BREED_CHANCE = 0.05; // 5% base chance for Rare / Epic / Legendary
 
+const RARITY_RANK: Record<PigBreed['rarity'], number> = {
+  common: 0,
+  uncommon: 1,
+  rare: 2,
+  epic: 3,
+  legendary: 4,
+};
+
+const PARENT_RARE_BONUS: Record<PigBreed['rarity'], number> = {
+  common: 0,
+  uncommon: 0.025, // +2.5%
+  rare: 0.075,     // +7.5%
+  epic: 0.14,      // +14%
+  legendary: 0.225, // +22.5%
+};
+
+export interface BreedingOdds {
+  rarePlusChance: number;
+  uncommonChance: number;
+  rareWeight: number;
+  epicWeight: number;
+  legendaryWeight: number;
+  parentBonusPercent: number;
+}
+
+export function getBreedingOdds(
+  breedAId: string | undefined,
+  breedBId: string | undefined,
+  useCharm: boolean
+): BreedingOdds {
+  const rarityA = (breedAId && BREED_MAP[breedAId]?.rarity) || 'common';
+  const rarityB = (breedBId && BREED_MAP[breedBId]?.rarity) || 'common';
+  const rankA = RARITY_RANK[rarityA];
+  const rankB = RARITY_RANK[rarityB];
+  const maxRank = Math.max(rankA, rankB);
+  const minRank = Math.min(rankA, rankB);
+
+  const bonus = PARENT_RARE_BONUS[rarityA] + PARENT_RARE_BONUS[rarityB];
+  const baseWithParents = BASE_RARE_BREED_CHANCE + bonus;
+  const rarePlusChance = Math.min(0.85, useCharm ? baseWithParents * 2 : baseWithParents);
+
+  const legendaryWeight = Math.min(0.45, 0.15 + maxRank * 0.06 + minRank * 0.02);
+  const epicWeight = Math.min(0.4, 0.3 + maxRank * 0.02);
+  const rareWeight = Math.max(0.15, 1 - legendaryWeight - epicWeight);
+
+  const uncommonChance = Math.min(0.65, 0.16 + (rankA + rankB) * 0.06);
+
+  return {
+    rarePlusChance,
+    uncommonChance,
+    rareWeight,
+    epicWeight,
+    legendaryWeight,
+    parentBonusPercent: Math.round(bonus * 1000) / 10,
+  };
+}
+
 export function resolveBreedingOutcome(
   breedAId: string,
   breedBId: string,
   useCharm: boolean
 ): string {
-  const rareThreshold = useCharm ? BASE_RARE_BREED_CHANCE * 2 : BASE_RARE_BREED_CHANCE;
+  const odds = getBreedingOdds(breedAId, breedBId, useCharm);
   const rareRoll = Math.random();
 
-  if (rareRoll < rareThreshold) {
-    // Rare hit (~5% base, ~10% with charm)!
+  if (rareRoll < odds.rarePlusChance) {
     const match = BREEDING_RECIPES.find(
       (r) =>
         (r.parentA === breedAId && r.parentB === breedBId) ||
@@ -561,35 +658,45 @@ export function resolveBreedingOutcome(
       return match.childBreedId;
     }
 
-    // Weighted rare pool: ~55% rare, ~30% epic, ~15% legendary
     const tierRoll = Math.random();
-    const rares = PIG_BREEDS.filter((b) => b.rarity === 'rare');
-    const epics = PIG_BREEDS.filter((b) => b.rarity === 'epic');
-    const legendaries = PIG_BREEDS.filter((b) => b.rarity === 'legendary');
+    const rares = PIG_BREEDS.filter((b) => b.rarity === 'rare' && !b.achievementOnly);
+    const epics = PIG_BREEDS.filter((b) => b.rarity === 'epic' && !b.achievementOnly);
+    const legendaries = PIG_BREEDS.filter((b) => b.rarity === 'legendary' && !b.achievementOnly);
 
     const pool =
-      tierRoll < 0.55 ? rares : tierRoll < 0.85 ? epics : legendaries;
+      tierRoll < odds.rareWeight
+        ? rares
+        : tierRoll < odds.rareWeight + odds.epicWeight
+        ? epics
+        : legendaries;
     return pool[Math.floor(Math.random() * pool.length)].id;
   }
 
-  // Standard 95% outcome: inherit Common/Uncommon or mutate slightly to Uncommon
-  const commons = PIG_BREEDS.filter((b) => b.rarity === 'common');
-  const uncommons = PIG_BREEDS.filter((b) => b.rarity === 'uncommon');
+  // Standard roll: higher-rarity parents also increase chance of Uncommon piglets
+  const commons = PIG_BREEDS.filter((b) => b.rarity === 'common' && !b.achievementOnly);
+  const uncommons = PIG_BREEDS.filter((b) => b.rarity === 'uncommon' && !b.achievementOnly);
 
-  if (Math.random() < 0.16) {
+  if (Math.random() < odds.uncommonChance) {
+    const breedA = BREED_MAP[breedAId];
+    const breedB = BREED_MAP[breedBId];
+    const uncommonParents = [breedA, breedB].filter(
+      (b): b is PigBreed => Boolean(b && b.rarity === 'uncommon')
+    );
+    if (uncommonParents.length > 0 && Math.random() < 0.5) {
+      return uncommonParents[Math.floor(Math.random() * uncommonParents.length)].id;
+    }
     return uncommons[Math.floor(Math.random() * uncommons.length)].id;
   }
 
   const breedA = BREED_MAP[breedAId];
   const breedB = BREED_MAP[breedBId];
-  const nonRareParents = [breedA, breedB].filter(
-    (b): b is PigBreed => Boolean(b && (b.rarity === 'common' || b.rarity === 'uncommon'))
+  const commonParents = [breedA, breedB].filter(
+    (b): b is PigBreed => Boolean(b && b.rarity === 'common')
   );
 
-  if (nonRareParents.length > 0) {
-    return nonRareParents[Math.floor(Math.random() * nonRareParents.length)].id;
+  if (commonParents.length > 0) {
+    return commonParents[Math.floor(Math.random() * commonParents.length)].id;
   }
 
-  // Even when breeding two rare+ parents, normal 95% rolls produce Common piglets so rare+ stays strictly ~5%
   return commons[Math.floor(Math.random() * commons.length)].id;
 }

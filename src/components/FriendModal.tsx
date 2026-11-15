@@ -136,10 +136,10 @@ export const FriendModal: React.FC<FriendModalProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <Users className="w-5 h-5 text-amber-100 shrink-0" />
             <div className="min-w-0">
-              <h2 className="font-display text-base sm:text-xl font-extrabold text-amber-50 truncate">
+              <h2 className="font-display text-base sm:text-xl font-extrabold text-amber-50 leading-tight">
                 Kết Bạn Nông Trại
               </h2>
-              <p className="text-[11px] text-amber-100/90 truncate">
+              <p className="text-[11px] text-amber-100/90 leading-snug">
                 Kết bạn xong thẻ sẽ hiện ngay ở thanh Bạn Bè phía dưới — chỉ cần bấm là qua thăm!
               </p>
             </div>
@@ -172,11 +172,11 @@ export const FriendModal: React.FC<FriendModalProps> = ({
             {/* Left: My Friend Card + QR */}
             <div className="p-3 rounded-xl bg-white/90 border-2 border-[#c29b68] space-y-2.5 flex flex-col justify-between">
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-extrabold text-[#3c1e08]">
                     1. Gửi Thẻ Kết Bạn Của Bạn
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-400 text-[10px] font-bold text-amber-900">
+                  <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-400 text-[10px] font-bold text-amber-900 whitespace-nowrap">
                     {state.playerName} · Lv.{state.level}
                   </span>
                 </div>
@@ -289,39 +289,45 @@ export const FriendModal: React.FC<FriendModalProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {realFriends.map((friend) => (
-                <div
-                  key={friend.id}
-                  className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-xl bg-white border border-[#c29b68] shadow-xs"
-                >
-                  {friend.isPartner && (
-                    <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500 shrink-0" />
-                  )}
-                  <span className="text-xs font-bold text-[#3c1e08]">
-                    {friend.farmerName} (Lv.{friend.level})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onVisitNeighbor(friend.id);
-                      onClose();
-                    }}
-                    className="ml-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer"
+              {realFriends.length === 0 ? (
+                <p className="text-[11px] text-[#7c4b26] italic">
+                  Chưa có bạn bè nào — gửi link/QR hoặc bấm + Hàng Xóm Mẫu để thêm ngay!
+                </p>
+              ) : (
+                realFriends.map((friend) => (
+                  <div
+                    key={friend.id}
+                    className="flex flex-wrap items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-xl bg-white border border-[#c29b68] shadow-xs max-w-full"
                   >
-                    Qua Thăm
-                  </button>
-                  {friend.id !== 'partner_farm' && (
+                    {friend.isPartner && (
+                      <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500 shrink-0" />
+                    )}
+                    <span className="text-xs font-bold text-[#3c1e08] truncate max-w-[160px]">
+                      {friend.farmerName} (Lv.{friend.level})
+                    </span>
                     <button
                       type="button"
-                      onClick={() => onRemoveFriend(friend.id)}
-                      title="Xóa bạn"
-                      className="p-1 rounded-lg text-rose-600 hover:bg-rose-100 cursor-pointer"
+                      onClick={() => {
+                        onVisitNeighbor(friend.id);
+                        onClose();
+                      }}
+                      className="ml-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      Qua Thăm
                     </button>
-                  )}
-                </div>
-              ))}
+                    {friend.id !== 'partner_farm' && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveFriend(friend.id)}
+                        title="Xóa bạn"
+                        className="p-1 rounded-lg text-rose-600 hover:bg-rose-100 cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

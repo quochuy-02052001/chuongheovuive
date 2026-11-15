@@ -10,7 +10,8 @@ export interface PigBreed {
   id: string;
   name: string;
   rarity: Rarity;
-  buyPrice: number; // 0 if breeding-only
+  buyPrice: number; // 0 if breeding-only or achievement-only
+  achievementOnly?: boolean; // true if only obtainable via Achievements (cannot be bred or bought)
   unlockLevel?: number; // Shop unlock level for buyable breeds
   sellPrice: number; // base adult sell price
   growthDurationSec: number; // total seconds from 0 -> 100% when cared for
@@ -48,7 +49,9 @@ export interface PigBreed {
     | 'unicorn'
     | 'kitsune'
     | 'phoenix'
-    | 'dragon_gold';
+    | 'dragon_gold'
+    | 'trophy_crystal'
+    | 'emperor_ruby';
 }
 
 export interface PigInstance {
@@ -104,7 +107,13 @@ export interface QuestItem {
   claimed: boolean;
 }
 
-export type AchievementCategory = 'collection' | 'care' | 'breed' | 'wealth' | 'social';
+export type AchievementCategory =
+  | 'collection'
+  | 'care'
+  | 'breed'
+  | 'wealth'
+  | 'social'
+  | 'crop_farm';
 
 export interface AchievementItem {
   id: string;
@@ -115,6 +124,7 @@ export interface AchievementItem {
   target: number;
   rewardGems: number;
   rewardCoins?: number;
+  rewardBreedId?: string;
   unlocked: boolean;
   claimed?: boolean;
 }
@@ -186,6 +196,48 @@ export interface BreedingIncubator {
   durationMs: number; // 5 minutes = 300,000 ms
 }
 
+export type CropFocus = 'coin' | 'xp' | 'feed';
+
+export interface CropSeed {
+  id: string;
+  name: string;
+  icon: string;
+  unlockLevel: number;
+  seedPrice: number;
+  growthSec: number;
+  focus: CropFocus;
+  harvestCoins: number;
+  harvestXp: number;
+  feedYield: number; // pig feed units yielded when converted
+  harvestYield: number; // crop items obtained per harvest
+  description: string;
+}
+
+export interface FarmPlot {
+  index: number; // 0..24 (5x5 grid)
+  seedId: string | null;
+  plantedAt: number;
+  lastUpdatedAt: number;
+  growthMs: number;
+  watered: boolean;
+  fertilizedCount: number;
+}
+
+export interface CropOrderRequirement {
+  seedId: string;
+  qty: number;
+}
+
+export interface CropOrder {
+  id: string;
+  title: string;
+  customer: string;
+  items: CropOrderRequirement[];
+  rewardCoins: number;
+  rewardXp: number;
+  rewardGems: number;
+}
+
 export interface FarmState {
   version: number;
   slot?: PartnerSlot;
@@ -225,4 +277,12 @@ export interface FarmState {
   lastWheelSpinAt: number;
   lastTickAt: number;
   lastQuestResetDate?: string; // YYYY-MM-DD in Vietnam timezone (UTC+7)
+  cropPlots?: FarmPlot[];
+  cropStorage?: Record<string, number>;
+  fertilizerCount?: number;
+  cropOrders?: CropOrder[];
+  totalCropsPlanted?: number;
+  totalCropsHarvested?: number;
+  totalOrdersCompleted?: number;
+  totalCropsConvertedToFeed?: number;
 }

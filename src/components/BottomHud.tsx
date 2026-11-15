@@ -77,7 +77,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
     : neighbors;
 
   const visibleNeighbors = filteredNeighbors.slice(neighborOffset, neighborOffset + 3);
-  const inviteSlotsCount = Math.max(0, 5 - visibleNeighbors.length);
+  const inviteSlotsCount = Math.max(0, 4 - visibleNeighbors.length);
 
   const handlePrevNeighbors = () => {
     setNeighborOffset((prev) => Math.max(0, prev - 1));
@@ -92,17 +92,17 @@ export const BottomHud: React.FC<BottomHudProps> = ({
   return (
     <div className="relative z-30 w-full select-none safe-bottom safe-x bg-[#4a280d]">
       {/* Main Bottom Console */}
-      <div className="flex items-end w-full">
+      <div className="flex items-stretch w-full">
         {/* BOTTOM-LEFT: Wooden Pig Collection Cabinet */}
-        <div className="landscape-compact-cabinet relative shrink-0 w-[84px] sm:w-[185px] md:w-[230px]">
+        <div className="landscape-compact-cabinet relative shrink-0 w-[78px] sm:w-[148px] md:w-[176px] lg:w-[208px] flex">
           {/* Arched 28-breed collection counter tab */}
           <button
             type="button"
             onClick={onOpenDex}
             title={`Sổ Tay Giống Heo: ${unlockedBreeds.length}/${PIG_BREEDS.length} · Chuồng: ${pigCount}/${barnCapacity}`}
-            className="absolute -top-5 sm:-top-7 [@media(max-height:500px)]:-top-5 left-1/2 -translate-x-1/2 z-10 px-2 sm:px-4 [@media(max-height:500px)]:px-2 py-0.5 rounded-t-xl sm:rounded-t-2xl bg-gradient-to-b from-[#d99b52] to-[#a96b30] border-2 sm:border-3 border-b-0 border-[#4a280d] shadow-md cursor-pointer hover:brightness-105 transition"
+            className="absolute -top-5 sm:-top-6 [@media(max-height:500px)]:-top-4.5 left-1/2 -translate-x-1/2 z-30 px-2 sm:px-3.5 [@media(max-height:500px)]:px-2 py-0.5 rounded-t-xl sm:rounded-t-2xl bg-gradient-to-b from-[#d99b52] to-[#a96b30] border-2 sm:border-[2.5px] border-b-0 border-[#4a280d] shadow-md cursor-pointer hover:brightness-105 transition"
           >
-            <div className="px-1.5 sm:px-2.5 [@media(max-height:500px)]:px-1.5 py-0.5 rounded-full bg-[#fff5d6] border border-[#8b5a2b] text-[#4a280d] font-mono-nums font-extrabold text-[10px] sm:text-xs [@media(max-height:500px)]:text-[10px] whitespace-nowrap">
+            <div className="px-1.5 sm:px-2 [@media(max-height:500px)]:px-1.5 py-0.5 rounded-full bg-[#fff5d6] border border-[#8b5a2b] text-[#4a280d] font-mono-nums font-extrabold text-[10px] sm:text-xs [@media(max-height:500px)]:text-[9.5px] whitespace-nowrap leading-none">
               {unlockedBreeds.length}/{PIG_BREEDS.length}
             </div>
           </button>
@@ -112,36 +112,36 @@ export const BottomHud: React.FC<BottomHudProps> = ({
             type="button"
             onClick={onOpenDex}
             title={`Xem bộ sưu tập ${PIG_BREEDS.length} giống heo`}
-            className="w-full wood-panel rounded-tr-xl p-1 sm:p-2 [@media(max-height:500px)]:p-1 text-left cursor-pointer hover:brightness-105 transition focus:outline-none flex flex-col justify-center items-center"
+            className="w-full h-full wood-panel rounded-tr-xl p-1 sm:p-1.5 [@media(max-height:500px)]:p-1 text-left cursor-pointer hover:brightness-105 transition focus:outline-none flex flex-col justify-center items-center"
           >
             {/* Mobile & Short Landscape compact view */}
-            <div className="sm:hidden [@media(max-height:500px)]:flex flex flex-col items-center justify-center p-1 w-full bg-[#3a1f0c]/85 rounded-lg border border-[#2a1506] py-1.5 [@media(max-height:500px)]:py-1">
+            <div className="sm:hidden [@media(max-height:500px)]:flex flex flex-col items-center justify-center p-1 w-full h-full bg-[#3a1f0c]/85 rounded-lg border border-[#2a1506] py-1.5 [@media(max-height:500px)]:py-1">
               <div className="flex items-center -space-x-1.5 mb-1">
                 {unlockedBreeds.slice(0, 3).map((bId) => (
                   <div key={bId} className="w-5 h-5 rounded-full bg-[#fef3c7] border border-[#b47b44] flex items-center justify-center overflow-hidden shadow-xs">
-                    <PigSprite breedId={bId} stage="piglet" size={17} />
+                    <PigSprite breedId={bId} stage="piglet" size={16} />
                   </div>
                 ))}
               </div>
-              <span className="text-[10px] font-bold text-amber-200 leading-none">Sổ Giống</span>
+              <span className="text-[10px] font-bold text-amber-200 leading-none whitespace-nowrap">Sổ Giống</span>
             </div>
 
-            {/* Desktop / tall tablet grid */}
-            <div className="hidden sm:grid [@media(max-height:500px)]:!hidden grid-cols-7 gap-0.5 bg-[#3a1f0c]/85 p-1 sm:p-1.5 rounded-lg border border-[#2a1506] w-full">
-              {PIG_BREEDS.slice(0, 28).map((breed) => {
+            {/* Desktop / tablet grid */}
+            <div className="hidden sm:grid [@media(max-height:500px)]:!hidden grid-cols-7 gap-0.5 bg-[#3a1f0c]/85 p-1 rounded-lg border border-[#2a1506] w-full my-auto">
+              {PIG_BREEDS.filter((b) => !b.achievementOnly).slice(0, 28).map((breed) => {
                 const isUnlocked = unlockedBreeds.includes(breed.id);
                 return (
                   <div
                     key={breed.id}
-                    className={`aspect-square rounded flex items-center justify-center ${
+                    className={`aspect-square rounded flex items-center justify-center overflow-hidden ${
                       isUnlocked
                         ? 'bg-[#f5d7a3] border border-[#b47b44]'
                         : 'bg-[#5c3618] border border-[#3e220c]'
                     }`}
                   >
                     {isUnlocked ? (
-                      <div className="scale-90">
-                        <PigSprite breedId={breed.id} stage="adult" size={20} />
+                      <div className="scale-75 md:scale-90">
+                        <PigSprite breedId={breed.id} stage="adult" size={18} />
                       </div>
                     ) : (
                       <Lock className="w-2.5 h-2.5 text-amber-300/80" />
@@ -154,10 +154,10 @@ export const BottomHud: React.FC<BottomHudProps> = ({
         </div>
 
         {/* RIGHT SIDE: Toolbar Shelf + Friends Strip */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col justify-end">
           {/* Wooden Toolbar Shelf (Shop, Chest, Tools, Trophy, Notebook, Upgrade) */}
-          <div className="relative flex items-end justify-start px-1 sm:px-3 [@media(max-height:500px)]:px-1.5 -mb-1 z-20 overflow-x-auto farm-scroll touch-pan-x overscroll-x-contain">
-            <div className="flex items-end gap-1.5 sm:gap-2 [@media(max-height:500px)]:gap-1 px-1 sm:px-2 py-0.5 sm:py-1 [@media(max-height:500px)]:py-0 flex-nowrap shrink-0">
+          <div className="relative z-20 border-t-[3px] border-[#cfa06b] bg-gradient-to-b from-[#6e3e19] via-[#562f11] to-[#46250c] shadow-[inset_0_2px_0_rgba(255,224,178,0.22)] px-1 sm:px-2 [@media(max-height:500px)]:px-1 overflow-x-auto no-scrollbar touch-pan-x overscroll-x-contain">
+            <div className="flex items-end justify-between sm:justify-evenly gap-0.5 sm:gap-1 [@media(max-height:500px)]:gap-0.5 w-full min-w-max py-0.5 [@media(max-height:500px)]:py-0">
               {/* 1. Shop Stall ("Mới" badge) */}
               <ToolbarItem
                 label="Cửa Hàng"
@@ -165,7 +165,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 badgeColor="bg-amber-400 text-amber-950"
                 onClick={onOpenShop}
               >
-                <svg viewBox="0 0 52 46" className="w-8 h-8 sm:w-11 sm:h-10">
+                <svg viewBox="0 0 52 46" className="w-full h-full">
                   <ellipse cx="26" cy="41" rx="18" ry="3.5" fill="#2c1607" opacity="0.35" />
                   <polygon points="8,20 34,20 34,40 8,40" fill="#c27029" stroke="#451a03" strokeWidth="2.1" strokeLinejoin="round" />
                   <polygon points="34,20 45,16 45,35 34,40" fill="#92400e" stroke="#451a03" strokeWidth="2.1" strokeLinejoin="round" />
@@ -186,7 +186,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 countBadge={storedPigCount > 0 ? storedPigCount : undefined}
                 onClick={onOpenInventory}
               >
-                <svg viewBox="0 0 52 46" className="w-8 h-8 sm:w-11 sm:h-10">
+                <svg viewBox="0 0 52 46" className="w-full h-full">
                   <ellipse cx="26" cy="41" rx="18" ry="3.5" fill="#2c1607" opacity="0.35" />
                   <polygon points="8,21 31,24 31,40 8,36" fill="#b91c1c" stroke="#450a0a" strokeWidth="2.1" strokeLinejoin="round" />
                   <polygon points="31,24 44,18 44,34 31,40" fill="#7f1d1d" stroke="#450a0a" strokeWidth="2.1" strokeLinejoin="round" />
@@ -205,7 +205,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 countBadge={feedCount}
                 onClick={() => onSelectTool(activeTool === 'feed' ? 'hand' : 'feed')}
               >
-                <svg viewBox="0 0 48 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 48 46" className="w-full h-full">
                   <ellipse cx="24" cy="41" rx="14" ry="3.5" fill="#2c1607" opacity="0.32" />
                   <path d="M 14 15 C 9 23, 9 37, 15 39 Q 24 42 33 39 C 39 37, 39 23, 34 15 Z" fill="#e59a47" stroke="#5c2d0c" strokeWidth="2.1" strokeLinejoin="round" />
                   <path d="M 16 15 L 12 8 L 20 11 L 24 7 L 28 11 L 36 8 L 32 15 Z" fill="#f5b35d" stroke="#5c2d0c" strokeWidth="2" strokeLinejoin="round" />
@@ -220,7 +220,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 active={activeTool === 'glove'}
                 onClick={() => onSelectTool(activeTool === 'glove' ? 'hand' : 'glove')}
               >
-                <svg viewBox="0 0 48 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 48 46" className="w-full h-full">
                   <ellipse cx="24" cy="40" rx="16" ry="3.2" fill="#2c1607" opacity="0.3" />
                   <g transform="rotate(-14 18 24)">
                     <rect x="8" y="14" width="15" height="19" rx="7" fill="#ffffff" stroke="#475569" strokeWidth="2" />
@@ -242,7 +242,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 countBadge={medCount}
                 onClick={() => onSelectTool(activeTool === 'medicine' ? 'hand' : 'medicine')}
               >
-                <svg viewBox="0 0 48 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 48 46" className="w-full h-full">
                   <ellipse cx="24" cy="40" rx="15" ry="3.2" fill="#2c1607" opacity="0.32" />
                   <g transform="rotate(-38 20 23)">
                     <rect x="11" y="10" width="12" height="24" rx="6" fill="#ef4444" stroke="#5e1212" strokeWidth="2" />
@@ -263,7 +263,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 active={activeTool === 'shovel'}
                 onClick={() => onSelectTool(activeTool === 'shovel' ? 'hand' : 'shovel')}
               >
-                <svg viewBox="0 0 50 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 50 46" className="w-full h-full">
                   <ellipse cx="25" cy="41" rx="16" ry="3.2" fill="#2c1607" opacity="0.32" />
                   {/* Handles & frame */}
                   <line x1="11" y1="19" x2="36" y2="33" stroke="#78350f" strokeWidth="3.5" strokeLinecap="round" />
@@ -284,7 +284,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 badgeColor="bg-red-500 text-white"
                 onClick={onOpenAchievements}
               >
-                <svg viewBox="0 0 48 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 48 46" className="w-full h-full">
                   <ellipse cx="24" cy="41" rx="13" ry="3" fill="#2c1607" opacity="0.32" />
                   <path d="M 13 13 Q 5 14 8 23 Q 11 26 16 23" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
                   <path d="M 35 13 Q 43 14 40 23 Q 37 26 32 23" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
@@ -302,7 +302,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 badgeColor="bg-red-500 text-white"
                 onClick={onOpenQuests}
               >
-                <svg viewBox="0 0 50 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 50 46" className="w-full h-full">
                   <ellipse cx="25" cy="41" rx="16" ry="3.2" fill="#2c1607" opacity="0.32" />
                   {/* Open cream book */}
                   <path d="M 7 15 Q 16 12 25 16 Q 34 12 43 15 L 41 36 Q 33 34 25 38 Q 17 34 9 36 Z" fill="#fef3c7" stroke="#78350f" strokeWidth="2.1" strokeLinejoin="round" />
@@ -324,7 +324,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
 
               {/* 9. Beveled 3D Lavender Purple Up-Arrow matching reference */}
               <ToolbarItem label="Chuồng & Lai" onClick={onOpenBreeding}>
-                <svg viewBox="0 0 48 46" className="w-8 h-8 sm:w-10 sm:h-10">
+                <svg viewBox="0 0 48 46" className="w-full h-full">
                   <ellipse cx="24" cy="41" rx="13" ry="3" fill="#2c1607" opacity="0.32" />
                   <polygon
                     points="24,8 40,23 32,23 32,38 16,38 16,23 8,23"
@@ -347,20 +347,20 @@ export const BottomHud: React.FC<BottomHudProps> = ({
           </div>
 
           {/* Wooden Shelf Divider + Friend / Neighbor Cards Strip */}
-          <div className="wood-shelf px-2 sm:px-3 [@media(max-height:500px)]:px-1.5 py-1.5 [@media(max-height:500px)]:py-1 flex items-center gap-1.5 sm:gap-2">
+          <div className="wood-shelf px-1.5 sm:px-2.5 [@media(max-height:500px)]:px-1.5 py-1 sm:py-1.5 [@media(max-height:500px)]:py-1 flex items-center gap-1.5 sm:gap-2">
             {/* Prev arrow */}
             <button
               type="button"
               onClick={handlePrevNeighbors}
               disabled={neighborOffset === 0}
               aria-label="Hàng xóm trước"
-              className="w-7 h-16 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-12 rounded-lg bg-[#d99b52] border-2 border-[#4a280d] flex items-center justify-center text-[#3c1e08] hover:brightness-110 disabled:opacity-40 cursor-pointer shrink-0"
+              className="w-6 h-14 sm:w-7 sm:h-16 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-11 rounded-lg bg-[#d99b52] border-2 border-[#4a280d] flex items-center justify-center text-[#3c1e08] hover:brightness-110 disabled:opacity-40 cursor-pointer shrink-0"
             >
-              <ChevronLeft className="w-5 h-5 [@media(max-height:500px)]:w-4 [@media(max-height:500px)]:h-4" />
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 [@media(max-height:500px)]:w-4 [@media(max-height:500px)]:h-4" />
             </button>
 
             {/* Neighbor Cards + Invite Slots */}
-            <div className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto farm-scroll py-0.5">
+            <div className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pt-2 pb-0.5">
               {visibleNeighbors.map((neighbor) => {
                 const isVisiting = visitingNeighborId === neighbor.id;
                 const isLivePartner = Boolean(p2pConnected && neighbor.isPartner);
@@ -377,7 +377,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                     type="button"
                     onClick={() => onVisitNeighbor(isVisiting ? null : neighbor.id)}
                     title={`Bấm để ${isVisiting ? 'về chuồng của bạn' : `qua thăm chuồng ${neighbor.farmerName}`}`}
-                    className={`landscape-compact-card relative shrink-0 w-[82px] sm:w-[94px] h-[82px] sm:h-[86px] rounded-lg border-2 p-1 flex flex-col items-center justify-between cursor-pointer transition-transform hover:-translate-y-0.5 ${
+                    className={`landscape-compact-card relative shrink-0 w-[74px] sm:w-[86px] h-[76px] sm:h-[84px] rounded-lg border-2 p-1 [@media(max-height:500px)]:p-0.5 flex flex-col items-center justify-between cursor-pointer transition-transform hover:-translate-y-0.5 ${
                       isVisiting
                         ? 'bg-emerald-100 border-emerald-600 ring-2 ring-emerald-400'
                         : neighbor.isPartner
@@ -389,7 +389,7 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                   >
                     {isLivePartner ? (
                       <span
-                        className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-full bg-emerald-500 border border-white text-[8px] font-extrabold text-white leading-none flex items-center gap-0.5 shadow"
+                        className="absolute -top-2 -right-1 px-1 py-0.5 rounded-full bg-emerald-500 border border-white text-[8px] font-extrabold text-white leading-none flex items-center gap-0.5 shadow z-10"
                         title="Đang kết nối Live 2 máy"
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-lime-200 animate-pulse" />
@@ -397,14 +397,14 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                       </span>
                     ) : neighbor.isPartner ? (
                       <span
-                        className="absolute -top-1.5 -right-1.5 text-xs leading-none drop-shadow"
+                        className="absolute -top-2 -right-1 text-xs leading-none drop-shadow z-10"
                         title="Nông Trại Người Yêu"
                       >
                         💕
                       </span>
                     ) : neighbor.isRealFriend ? (
                       <span
-                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-sky-500 border border-white text-[9px] font-bold text-white flex items-center justify-center shadow"
+                        className="absolute -top-2 -right-1 w-4 h-4 rounded-full bg-sky-500 border border-white text-[9px] font-bold text-white flex items-center justify-center shadow z-10"
                         title="Bạn Bè Thật"
                       >
                         ★
@@ -412,18 +412,18 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                     ) : null}
 
                     {isVisiting && (
-                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-extrabold whitespace-nowrap shadow">
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-extrabold whitespace-nowrap shadow z-10 leading-none">
                         Đang thăm
                       </span>
                     )}
 
-                    <div className="w-full text-[10px] font-extrabold text-[#4a280d] truncate text-center leading-tight">
+                    <div className="w-full text-[10px] sm:text-[10.5px] [@media(max-height:500px)]:text-[9px] font-extrabold text-[#4a280d] truncate text-center leading-tight px-0.5">
                       {neighbor.farmerName}
                     </div>
 
                     {/* Farmer portrait */}
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-6 rounded bg-sky-100 border border-[#8b5a2b] flex items-center justify-center overflow-hidden">
-                      <svg viewBox="0 0 40 40" className="w-8 h-8 sm:w-9 sm:h-9 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-6">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 [@media(max-height:500px)]:w-[22px] [@media(max-height:500px)]:h-[22px] rounded bg-sky-100 border border-[#8b5a2b] flex items-center justify-center overflow-hidden shrink-0">
+                      <svg viewBox="0 0 40 40" className="w-full h-full">
                         <circle cx="20" cy="14" r="7" fill="#fde68a" stroke="#451a03" strokeWidth="1.8" />
                         <path d="M 13 13 Q 20 5 27 13" fill={neighbor.avatarHair} />
                         <circle cx="17.5" cy="14" r="1.2" fill="#1c1917" />
@@ -433,13 +433,13 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                     </div>
 
                     {/* Medal + Level row */}
-                    <div className="w-full flex items-center justify-between px-0.5">
+                    <div className="w-full flex items-center justify-between gap-1 px-0.5">
                       <span
-                        className={`w-4 h-4 sm:w-5 sm:h-5 [@media(max-height:500px)]:w-4 [@media(max-height:500px)]:h-4 rounded-full border text-[9px] sm:text-[10px] font-extrabold flex items-center justify-center font-mono-nums ${medalColor}`}
+                        className={`w-4 h-4 sm:w-[18px] sm:h-[18px] [@media(max-height:500px)]:w-3.5 [@media(max-height:500px)]:h-3.5 rounded-full border text-[8.5px] sm:text-[9.5px] [@media(max-height:500px)]:text-[8px] font-extrabold flex items-center justify-center font-mono-nums shrink-0 leading-none ${medalColor}`}
                       >
                         {neighbor.isPartner ? '♥' : neighbor.rank}
                       </span>
-                      <span className="px-1 sm:px-1.5 py-0.5 rounded bg-sky-500 text-white text-[9px] sm:text-[10px] font-extrabold font-mono-nums leading-none border border-sky-800">
+                      <span className="px-1 sm:px-1.5 py-[1px] sm:py-0.5 rounded bg-sky-500 text-white text-[8.5px] sm:text-[9.5px] [@media(max-height:500px)]:text-[8px] font-extrabold font-mono-nums leading-none border border-sky-800 whitespace-nowrap">
                         Lv.{neighbor.level}
                       </span>
                     </div>
@@ -454,12 +454,12 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                   type="button"
                   onClick={onInviteNeighbor}
                   title="Kết bạn mới hoặc thêm hàng xóm để bấm là qua thăm"
-                  className="landscape-compact-card shrink-0 w-[80px] sm:w-[90px] h-[82px] sm:h-[86px] rounded-lg bg-[#e2eff8] border-2 border-[#5c3618] p-1 flex flex-col items-center justify-between cursor-pointer hover:bg-[#f0f7fc] transition-transform hover:-translate-y-0.5"
+                  className="landscape-compact-card shrink-0 w-[74px] sm:w-[84px] h-[76px] sm:h-[84px] rounded-lg bg-[#e2eff8] border-2 border-[#5c3618] p-1 [@media(max-height:500px)]:p-0.5 flex flex-col items-center justify-between cursor-pointer hover:bg-[#f0f7fc] transition-transform hover:-translate-y-0.5"
                 >
-                  <div className="w-full flex-1 rounded bg-[#7c94a8] flex items-center justify-center relative">
-                    <span className="font-display text-xl sm:text-2xl [@media(max-height:500px)]:text-lg font-extrabold text-white drop-shadow">?</span>
+                  <div className="w-full flex-1 rounded bg-[#7c94a8] flex items-center justify-center relative min-h-0">
+                    <span className="font-display text-lg sm:text-xl [@media(max-height:500px)]:text-base font-extrabold text-white drop-shadow leading-none">?</span>
                   </div>
-                  <div className="w-full mt-1 [@media(max-height:500px)]:mt-0.5 py-0.5 rounded bg-[#ef4444] text-white text-[9px] sm:text-[10px] font-extrabold text-center border border-[#7f1d1d] whitespace-nowrap">
+                  <div className="w-full mt-1 [@media(max-height:500px)]:mt-0.5 py-0.5 sm:py-1 [@media(max-height:500px)]:py-[2px] rounded bg-[#ef4444] text-white text-[9px] sm:text-[10px] [@media(max-height:500px)]:text-[8.5px] font-extrabold text-center border border-[#7f1d1d] whitespace-nowrap leading-none">
                     Kết Bạn
                   </div>
                 </button>
@@ -472,14 +472,14 @@ export const BottomHud: React.FC<BottomHudProps> = ({
               onClick={handleNextNeighbors}
               disabled={neighborOffset + 3 >= filteredNeighbors.length}
               aria-label="Hàng xóm tiếp theo"
-              className="w-7 h-16 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-12 rounded-lg bg-[#d99b52] border-2 border-[#4a280d] flex items-center justify-center text-[#3c1e08] hover:brightness-110 disabled:opacity-40 cursor-pointer shrink-0"
+              className="w-6 h-14 sm:w-7 sm:h-16 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-11 rounded-lg bg-[#d99b52] border-2 border-[#4a280d] flex items-center justify-center text-[#3c1e08] hover:brightness-110 disabled:opacity-40 cursor-pointer shrink-0"
             >
-              <ChevronRight className="w-5 h-5 [@media(max-height:500px)]:w-4 [@media(max-height:500px)]:h-4" />
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 [@media(max-height:500px)]:w-4 [@media(max-height:500px)]:h-4" />
             </button>
 
             {/* Right Utility Column: Search, Settings, Gift Box */}
             <div className="flex flex-col items-end gap-1.5 [@media(max-height:500px)]:gap-1 shrink-0 pl-1">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 [@media(max-height:500px)]:gap-1">
                 {showSearchInput && (
                   <input
                     type="text"
@@ -496,17 +496,17 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                   type="button"
                   onClick={() => setShowSearchInput((v) => !v)}
                   title="Tìm kiếm hàng xóm"
-                  className="w-8 h-7 [@media(max-height:500px)]:w-7 [@media(max-height:500px)]:h-6 rounded bg-[#e8ba78] border-2 border-[#4a280d] flex items-center justify-center text-[#4a280d] hover:brightness-105 cursor-pointer"
+                  className="w-7 h-7 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-6 rounded bg-[#e8ba78] border-2 border-[#4a280d] flex items-center justify-center text-[#4a280d] hover:brightness-105 cursor-pointer"
                 >
-                  <Search className="w-4 h-4 [@media(max-height:500px)]:w-3.5 [@media(max-height:500px)]:h-3.5" />
+                  <Search className="w-3.5 h-3.5 [@media(max-height:500px)]:w-3 [@media(max-height:500px)]:h-3" />
                 </button>
                 <button
                   type="button"
                   onClick={onOpenSettings}
                   title="Cài đặt & Lưu trữ Local/Online"
-                  className="w-8 h-7 [@media(max-height:500px)]:w-7 [@media(max-height:500px)]:h-6 rounded bg-[#e8ba78] border-2 border-[#4a280d] flex items-center justify-center text-[#4a280d] hover:brightness-105 cursor-pointer"
+                  className="w-7 h-7 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-6 rounded bg-[#e8ba78] border-2 border-[#4a280d] flex items-center justify-center text-[#4a280d] hover:brightness-105 cursor-pointer"
                 >
-                  <Settings className="w-4 h-4 [@media(max-height:500px)]:w-3.5 [@media(max-height:500px)]:h-3.5" />
+                  <Settings className="w-3.5 h-3.5 [@media(max-height:500px)]:w-3 [@media(max-height:500px)]:h-3" />
                 </button>
               </div>
 
@@ -514,15 +514,15 @@ export const BottomHud: React.FC<BottomHudProps> = ({
                 type="button"
                 onClick={onClaimDailyGift}
                 title={canClaimDailyGift ? 'Nhận Quà Hàng Ngày!' : 'Đã nhận quà hôm nay'}
-                className={`relative w-12 h-11 [@media(max-height:500px)]:w-10 [@media(max-height:500px)]:h-8 rounded-xl border-2 border-[#4a280d] flex items-center justify-center cursor-pointer transition-transform hover:scale-105 ${
+                className={`relative w-12 h-10 sm:h-11 [@media(max-height:500px)]:w-10 [@media(max-height:500px)]:h-[30px] rounded-xl border-2 border-[#4a280d] flex items-center justify-center cursor-pointer transition-transform hover:scale-105 ${
                   canClaimDailyGift
                     ? 'bg-gradient-to-b from-amber-300 to-amber-500 animate-bounce'
                     : 'bg-[#d99b52] opacity-85'
                 }`}
               >
-                <Gift className="w-6 h-6 [@media(max-height:500px)]:w-4.5 [@media(max-height:500px)]:h-4.5 text-red-700" />
+                <Gift className="w-5 h-5 [@media(max-height:500px)]:w-4 [@media(max-height:500px)]:h-4 text-red-700" />
                 {canClaimDailyGift && (
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white text-[9.5px] font-bold flex items-center justify-center border border-white/80">
                     1
                   </span>
                 )}
@@ -558,26 +558,28 @@ const ToolbarItem: React.FC<ToolbarItemProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`group relative flex flex-col items-center justify-end px-1 sm:px-1.5 py-0.5 sm:py-1 rounded-xl transition-transform cursor-pointer focus:outline-none shrink-0 min-w-[46px] sm:min-w-[56px] select-none ${
+      className={`group relative flex flex-col items-center justify-end px-1 sm:px-1.5 pt-2 pb-1 [@media(max-height:500px)]:pt-1.5 [@media(max-height:500px)]:pb-0.5 rounded-xl transition-transform cursor-pointer focus:outline-none shrink-0 min-w-[42px] sm:min-w-[46px] select-none ${
         active
-          ? 'bg-amber-300/90 ring-2 ring-amber-500 -translate-y-1 sm:-translate-y-1.5 shadow-lg'
+          ? 'bg-amber-300/90 ring-2 ring-amber-500 -translate-y-0.5 shadow-lg'
           : 'hover:-translate-y-0.5 active:scale-95'
       }`}
     >
-      {badge && (
-        <span
-          className={`absolute -top-1.5 -right-0.5 px-1 sm:px-1.5 py-0.2 rounded-full text-[8px] sm:text-[9px] font-extrabold border border-[#4a280d] shadow-sm leading-tight z-10 ${badgeColor}`}
-        >
-          {badge}
-        </span>
-      )}
-      {typeof countBadge === 'number' && (
-        <span className="absolute -top-1.5 -right-0.5 px-1.5 py-0.2 rounded-full bg-[#4a280d] text-amber-100 text-[8px] sm:text-[9px] font-mono-nums font-bold leading-tight border border-amber-300/70 z-10 shadow-xs">
-          {countBadge}
-        </span>
-      )}
-      <div className="drop-shadow-md flex items-center justify-center [@media(max-height:500px)]:scale-90">{children}</div>
-      <span className="mt-0.5 px-1 sm:px-1.5 py-0.5 rounded bg-[#4a280d]/85 text-amber-50 text-[9px] sm:text-[10px] font-bold leading-none whitespace-nowrap">
+      <div className="relative flex items-center justify-center w-7 h-7 sm:w-9 sm:h-8 md:w-10 md:h-9 [@media(max-height:500px)]:w-6 [@media(max-height:500px)]:h-6 drop-shadow-md">
+        {children}
+        {badge && (
+          <span
+            className={`absolute -top-1.5 -right-2 px-1 sm:px-1.5 py-[1px] rounded-full text-[8px] sm:text-[9px] font-extrabold border border-[#4a280d] shadow-sm leading-none z-10 ${badgeColor}`}
+          >
+            {badge}
+          </span>
+        )}
+        {typeof countBadge === 'number' && (
+          <span className="absolute -top-1.5 -right-2 px-1.5 py-[1px] rounded-full bg-[#4a280d] text-amber-100 text-[8px] sm:text-[9px] font-mono-nums font-bold leading-none border border-amber-300/80 z-10 shadow-xs">
+            {countBadge}
+          </span>
+        )}
+      </div>
+      <span className="mt-1 [@media(max-height:500px)]:mt-0.5 px-1 sm:px-1.5 py-0.5 rounded bg-[#3b1f09]/90 text-amber-50 text-[8.5px] sm:text-[9.5px] md:text-[10px] font-bold leading-none whitespace-nowrap tracking-tight">
         {label}
       </span>
     </button>

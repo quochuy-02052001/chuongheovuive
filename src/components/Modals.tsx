@@ -22,11 +22,20 @@ import {
   PIG_BREEDS,
   RARITY_LABELS,
   SHOP_SUPPLIES,
+  getBreedRarityBadge,
+  getBreedingOdds,
 } from '../data/pigBreeds';
 import { AchievementCategory, FarmState, PigInstance } from '../types/game';
-import { MAX_STORED_PIGS, calculateBreedingCost, getBarnExpandCost } from '../services/farmRepository';
+import {
+  BARN_UPGRADE_TIERS,
+  MAX_BARN_CAPACITY,
+  MAX_STORED_PIGS,
+  calculateBreedingCost,
+  getBarnExpandInfo,
+} from '../services/farmRepository';
 import { getVietnamClock } from '../services/vietnamTime';
 import { PigSprite } from './PigSprite';
+import { SupplyItemSprite } from './SupplyItemSprite';
 
 export type ActiveModal =
   | null
@@ -39,6 +48,7 @@ export type ActiveModal =
   | 'wheel'
   | 'couple'
   | 'friend'
+  | 'crop_farm'
   | 'settings';
 
 interface ModalShellProps {
@@ -58,7 +68,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
 }) => {
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-1.5 sm:p-5 bg-black/55 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-1.5 sm:p-5 bg-black/60"
       onClick={onClose}
     >
       <div
@@ -112,7 +122,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 }) => {
   const [tab, setTab] = useState<'pigs' | 'supplies' | 'upgrades'>('pigs');
   const buyablePigs = PIG_BREEDS.filter((b) => b.buyPrice > 0);
-  const expandCost = getBarnExpandCost(state.barnCapacity);
+  const expandInfo = getBarnExpandInfo(state.barnCapacity, state.level);
   const isFull = state.pigs.length >= state.barnCapacity;
 
   return (
@@ -136,9 +146,9 @@ export const ShopModal: React.FC<ShopModalProps> = ({
       {tab === 'pigs' && (
         <>
           <div className="mb-3 px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-300 text-[#5c3618] text-xs font-semibold">
-            Mới vào game bạn mua <strong>Heo Thường (Lv.1)</strong>. Chơi lên cấp sẽ mở khóa thêm giống mới trong shop; toàn bộ{' '}
-            <strong>{PIG_BREEDS.filter((b) => b.buyPrice === 0).length} giống Hiếm, Sử Thi & Cực Hiếm</strong> chỉ có thể{' '}
-            <strong>Lai Tạo ra (~5%)</strong>!
+            Mới vào game bạn mua <strong>Heo Thường (Lv.1)</strong>. Chơi lên cấp sẽ mở khóa thêm giống mới trong shop;{' '}
+            <strong>{PIG_BREEDS.filter((b) => b.buyPrice === 0 && !b.achievementOnly).length} giống Hiếm, Sử Thi & Cực Hiếm</strong> mở qua{' '}
+            <strong>Lai Tạo</strong>, và <strong>{PIG_BREEDS.filter((b) => b.achievementOnly).length} giống độc bản</strong> chỉ thưởng khi hoàn thành <strong>Thành Tựu</strong>!
           </div>
           {isFull && (
             <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-amber-100 border border-amber-400 text-amber-950 text-sm font-semibold">
@@ -222,18 +232,23 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             return (
               <div
                 key={item.id}
-                className="p-3.5 rounded-xl bg-white/85 border-2 border-[#c29b68] flex flex-col justify-between gap-2"
+                className="p-3.5 rounded-xl bg-white/85 border-2 border-[#c29b68] flex flex-col justify-between gap-2.5"
               >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-display font-bold text-base text-[#3c1e08]">
-                      {item.name}
-                    </h4>
-                    <span className="text-xs font-mono-nums font-bold text-[#78471e]">
-                      Đang có: {owned}
-                    </span>
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-[#fef3c7] border border-[#d6b27e] flex items-center justify-center shrink-0">
+                    <SupplyItemSprite itemId={item.id} size={46} />
                   </div>
-                  <p className="text-xs text-[#6d411c] mt-1">{item.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-display font-bold text-base text-[#3c1e08] truncate">
+                        {item.name}
+                      </h4>
+                      <span className="text-xs font-mono-nums font-bold text-[#78471e] whitespace-nowrap shrink-0">
+                        Có: {owned}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#6d411c] mt-1">{item.description}</p>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-[#e5cfa8]">
                   <span className="font-mono-nums font-bold text-amber-800">
@@ -266,38 +281,78 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
       {tab === 'upgrades' && (
         <div className="space-y-3">
-          <div className="p-4 rounded-xl bg-white/85 border-2 border-[#c29b68] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h4 className="font-display font-bold text-lg text-[#3c1e08]">
-                Mở Rộng Chuồng Nuôi (+4 Chỗ)
-              </h4>
-              <p className="text-sm text-[#6d411c]">
-                Sức chứa hiện tại: <strong className="font-mono-nums">{state.barnCapacity}</strong> chú heo (Tối đa 28).
-                {state.barnCapacity < 28 && (
-                  <span className="ml-1 text-xs text-violet-700 font-semibold">
-                    (Mức kế: {state.barnCapacity} → {Math.min(28, state.barnCapacity + 4)})
-                  </span>
-                )}
-              </p>
+          <div className="p-4 rounded-xl bg-white/85 border-2 border-[#c29b68] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-xl bg-[#fef3c7] border border-[#d6b27e] flex items-center justify-center shrink-0">
+                  <SupplyItemSprite itemId="barn_upgrade" size={46} />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-lg text-[#3c1e08]">
+                    Mở Rộng Chuồng Nuôi (+2 Chỗ / Lần)
+                  </h4>
+                  <p className="text-sm text-[#6d411c]">
+                    Sức chứa hiện tại: <strong className="font-mono-nums">{state.barnCapacity}</strong>/{MAX_BARN_CAPACITY} chú heo.
+                    {!expandInfo.isMax && (
+                      <span className="ml-1 text-xs text-violet-700 font-semibold">
+                        (Mức kế: {state.barnCapacity} → {expandInfo.nextCapacity} · Mở ở Lv.{expandInfo.requiredLevel})
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={expandInfo.isMax || expandInfo.isLevelLocked || state.coins < expandInfo.cost}
+                onClick={onExpandBarn}
+                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-stone-300 disabled:text-stone-600 text-white text-sm font-bold cursor-pointer whitespace-nowrap shrink-0"
+              >
+                {expandInfo.isMax
+                  ? 'Đã Tối Đa (11 chỗ)'
+                  : expandInfo.isLevelLocked
+                  ? `Cần Lv.${expandInfo.requiredLevel} để mở`
+                  : `Nâng Cấp +${expandInfo.increment} (${expandInfo.cost.toLocaleString('vi-VN')} ₫)`}
+              </button>
             </div>
-            <button
-              type="button"
-              disabled={state.coins < expandCost || state.barnCapacity >= 28}
-              onClick={onExpandBarn}
-              className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-stone-300 disabled:text-stone-600 text-white text-sm font-bold cursor-pointer whitespace-nowrap"
-            >
-              {state.barnCapacity >= 28 ? 'Đã Tối Đa' : `Nâng Cấp (${expandCost.toLocaleString('vi-VN')} ₫)`}
-            </button>
+
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#e5cfa8]">
+              {BARN_UPGRADE_TIERS.map((tier) => {
+                const isDone = state.barnCapacity >= tier.targetCapacity;
+                const isUnlocked = state.level >= tier.requiredLevel;
+                return (
+                  <div
+                    key={tier.requiredLevel}
+                    className={`px-2.5 py-1.5 rounded-lg border text-center text-[11px] font-bold ${
+                      isDone
+                        ? 'bg-emerald-100 border-emerald-400 text-emerald-900'
+                        : isUnlocked
+                        ? 'bg-violet-100 border-violet-400 text-violet-900'
+                        : 'bg-stone-100 border-stone-300 text-stone-600'
+                    }`}
+                  >
+                    <div>Lv.{tier.requiredLevel} → {tier.targetCapacity} chỗ</div>
+                    <div className="text-[10px] font-mono-nums opacity-85">
+                      {isDone ? 'Đã mở' : `${tier.cost.toLocaleString('vi-VN')} ₫`}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="p-4 rounded-xl bg-white/85 border-2 border-[#c29b68] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h4 className="font-display font-bold text-lg text-[#3c1e08]">
-                Gọi Cún Bảo Vệ Canh Chuồng (1 Giờ)
-              </h4>
-              <p className="text-sm text-[#6d411c]">
-                Cún con giúp tăng tâm trạng đàn heo và giữ an toàn cho các hộp quà rơi trên sân.
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-xl bg-[#fef3c7] border border-[#d6b27e] flex items-center justify-center shrink-0">
+                <SupplyItemSprite itemId="guard_dog" size={46} />
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-lg text-[#3c1e08]">
+                  Gọi Cún Bảo Vệ Canh Chuồng (1 Giờ)
+                </h4>
+                <p className="text-sm text-[#6d411c]">
+                  Cún con giúp tăng tâm trạng đàn heo và giữ an toàn cho các hộp quà rơi trên sân.
+                </p>
+              </div>
             </div>
             <button
               type="button"
@@ -484,11 +539,18 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               return (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-xl bg-white/85 border-2 border-[#c29b68] flex items-center justify-between gap-3"
+                  className="p-3 rounded-xl bg-white/85 border-2 border-[#c29b68] flex items-center justify-between gap-3"
                 >
-                  <div>
-                    <h4 className="font-display font-bold text-[#3c1e08]">{item.name}</h4>
-                    <p className="text-xs text-[#6d411c] mt-0.5">{item.description}</p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-[#fef3c7] border border-[#d6b27e] flex items-center justify-center shrink-0">
+                      <SupplyItemSprite itemId={item.id} size={42} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-display font-bold text-sm sm:text-base text-[#3c1e08] truncate">
+                        {item.name}
+                      </h4>
+                      <p className="text-xs text-[#6d411c] mt-0.5 line-clamp-2">{item.description}</p>
+                    </div>
                   </div>
                   <div className="px-3 py-1.5 rounded-lg bg-[#fef3c7] border border-[#b47b44] font-mono-nums font-extrabold text-[#4a280d] shrink-0">
                     x{qty}
@@ -496,6 +558,25 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               );
             })}
+
+            <div className="p-3 rounded-xl bg-white/85 border-2 border-[#c29b68] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-400 flex items-center justify-center shrink-0">
+                  <SupplyItemSprite itemId="fertilizer" size={42} />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-display font-bold text-sm sm:text-base text-[#3c1e08] truncate">
+                    Phân Bón Nông Trại
+                  </h4>
+                  <p className="text-xs text-[#6d411c] mt-0.5 line-clamp-2">
+                    Giảm 50% thời gian chín cho cây trồng. Rớt thêm khi dọn phân heo!
+                  </p>
+                </div>
+              </div>
+              <div className="px-3 py-1.5 rounded-lg bg-emerald-100 border border-emerald-500 font-mono-nums font-extrabold text-emerald-950 shrink-0">
+                x{state.fertilizerCount ?? 0}
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#78471e]/20">
@@ -506,9 +587,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   onFeedAll();
                   onClose();
                 }}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold cursor-pointer flex items-center gap-1.5"
               >
-                Rải Cám Cho Cả Đàn
+                <SupplyItemSprite itemId="feed_standard" size={20} />
+                <span>Rải Cám Cho Cả Đàn</span>
               </button>
               <button
                 type="button"
@@ -516,9 +598,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   onHealAll();
                   onClose();
                 }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold cursor-pointer flex items-center gap-1.5"
               >
-                Chữa Bệnh Toàn Chuồng
+                <SupplyItemSprite itemId="medicine_pill" size={20} />
+                <span>Chữa Bệnh Toàn Chuồng</span>
               </button>
             </div>
 
@@ -553,7 +636,7 @@ export const DexModal: React.FC<DexModalProps> = ({ state, onClose }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         {PIG_BREEDS.map((breed) => {
           const unlocked = state.unlockedBreeds.includes(breed.id);
-          const r = RARITY_LABELS[breed.rarity];
+          const r = getBreedRarityBadge(breed);
           const recipe = BREEDING_RECIPES.find((rec) => rec.childBreedId === breed.id);
 
           return (
@@ -561,7 +644,9 @@ export const DexModal: React.FC<DexModalProps> = ({ state, onClose }) => {
               key={breed.id}
               className={`p-3 rounded-xl border-2 flex flex-col gap-2 ${
                 unlocked
-                  ? 'bg-white/90 border-[#b47b44]'
+                  ? breed.achievementOnly
+                    ? 'bg-gradient-to-br from-amber-50 to-rose-50/70 border-amber-500'
+                    : 'bg-white/90 border-[#b47b44]'
                   : 'bg-[#e7d6b7]/70 border-[#a68356] opacity-85'
               }`}
             >
@@ -575,7 +660,7 @@ export const DexModal: React.FC<DexModalProps> = ({ state, onClose }) => {
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-display font-bold text-sm text-[#3c1e08] truncate">
-                    {unlocked ? breed.name : 'Giống Heo Bí Ẩn'}
+                    {unlocked ? breed.name : breed.achievementOnly ? 'Giống Độc Quyền (Thành Tựu)' : 'Giống Heo Bí Ẩn'}
                   </h4>
                   <span
                     className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5"
@@ -589,6 +674,8 @@ export const DexModal: React.FC<DexModalProps> = ({ state, onClose }) => {
               <p className="text-xs text-[#5c3618] leading-relaxed">
                 {unlocked
                   ? breed.description
+                  : breed.achievementOnly
+                  ? 'Giống hiếm độc quyền chỉ nhận thưởng khi hoàn thành mốc Thành Tựu Chuồng Heo (Không thể lai tạo).'
                   : breed.buyPrice > 0
                   ? `Mở bán ở Cửa Hàng khi đạt Cấp ${breed.unlockLevel ?? 1}.`
                   : recipe
@@ -597,7 +684,15 @@ export const DexModal: React.FC<DexModalProps> = ({ state, onClose }) => {
               </p>
 
               <div className="mt-auto pt-1.5 border-t border-[#e5cfa8] flex items-center justify-between text-[11px] font-semibold text-[#78471e]">
-                <span>{unlocked ? breed.trait : breed.buyPrice === 0 ? 'Chỉ Lai Tạo (~5%)' : `Shop Lv.${breed.unlockLevel ?? 1}`}</span>
+                <span>
+                  {unlocked
+                    ? breed.trait
+                    : breed.achievementOnly
+                    ? 'Chỉ Thành Tựu · Không Lai'
+                    : breed.buyPrice === 0
+                    ? 'Chỉ Lai Tạo (~5%)'
+                    : `Shop Lv.${breed.unlockLevel ?? 1}`}
+                </span>
                 <span className="font-mono-nums">{breed.sellPrice} ₫</span>
               </div>
             </div>
@@ -649,10 +744,18 @@ export const BreedingModal: React.FC<BreedingModalProps> = ({
       : undefined;
 
   const breedCost = parentA && parentB ? calculateBreedingCost(parentA.breedId, parentB.breedId) : 120;
+  const isBarnFull = state.pigs.length >= state.barnCapacity;
+  const isBagFull = (state.storedPigs?.length || 0) >= MAX_STORED_PIGS;
   const canBreed =
     Boolean(parentA && parentB && parentA.id !== parentB.id) &&
-    state.pigs.length < state.barnCapacity &&
+    (!isBarnFull || !isBagFull) &&
     state.coins >= breedCost;
+
+  const breedingOdds = getBreedingOdds(parentA?.breedId, parentB?.breedId, useCharm && charmQty > 0);
+  const rarePctLabel = (breedingOdds.rarePlusChance * 100).toFixed(1).replace(/\.0$/, '');
+  const legendPctLabel = (breedingOdds.rarePlusChance * breedingOdds.legendaryWeight * 100)
+    .toFixed(1)
+    .replace(/\.0$/, '');
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -671,16 +774,29 @@ export const BreedingModal: React.FC<BreedingModalProps> = ({
       <div className="p-4 rounded-xl bg-white/90 border-2 border-[#b47b44] mb-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <h3 className="font-display font-bold text-lg text-[#3c1e08] flex items-center gap-2">
-            <Heart className="w-5 h-5 text-rose-500" /> Lai Tạo Giống Mới (Phí {breedCost.toLocaleString('vi-VN')} ₫ · Ấp 5 phút)
+            <Heart className="w-5 h-5 text-rose-500" /> Lai Tạo Giống Mới (Phí {breedCost.toLocaleString('vi-VN')} ₫ · Ấp 2–20 phút)
           </h3>
-          <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg">
-            Tỷ lệ ra giống Hiếm/Cực Hiếm: {useCharm && charmQty > 0 ? '10% (Có Bùa)' : '5%'}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg">
+              Tỷ lệ Hiếm+: {rarePctLabel}%
+              {breedingOdds.parentBonusPercent > 0 ? ` (+${breedingOdds.parentBonusPercent}% từ cha mẹ)` : ''}
+              {useCharm && charmQty > 0 ? ' · ×2 Bùa' : ''}
+            </span>
+            <span className="text-[11px] font-bold text-purple-900 bg-purple-100 border border-purple-300 px-2 py-1 rounded-lg">
+              Cực Hiếm: {legendPctLabel}%
+            </span>
+          </div>
         </div>
+
+        {isBarnFull && (
+          <div className="mb-3 px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-300 text-xs font-bold text-sky-900">
+            🎒 Chuồng đang đầy ({state.pigs.length}/{state.barnCapacity}): Bạn vẫn có thể phối giống, heo con khi nở sẽ tự động đưa vào <strong>Túi Đồ</strong> ({state.storedPigs?.length || 0}/{MAX_STORED_PIGS})!
+          </div>
+        )}
 
         {matchingRecipe && (
           <div className="mb-3 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-300 text-xs font-bold text-purple-900">
-            Công thức ghép cặp khớp! Nếu trúng tỷ lệ hiếm ({useCharm && charmQty > 0 ? '10%' : '5%'}) sẽ nở chắc chắn:{' '}
+            Công thức ghép cặp khớp! Nếu trúng tỷ lệ hiếm ({rarePctLabel}%) sẽ nở chắc chắn:{' '}
             <span className="underline">{BREED_MAP[matchingRecipe.childBreedId]?.name}</span>
           </div>
         )}
@@ -764,7 +880,7 @@ export const BreedingModal: React.FC<BreedingModalProps> = ({
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-xs font-bold text-[#4a280d] cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-[#4a280d] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={useCharm && charmQty > 0}
@@ -772,7 +888,8 @@ export const BreedingModal: React.FC<BreedingModalProps> = ({
                   onChange={(e) => setUseCharm(e.target.checked)}
                   className="w-4 h-4 accent-purple-600"
                 />
-                Dùng Bùa Lai Giống (Còn: {charmQty})
+                <SupplyItemSprite itemId="breed_charm" size={22} />
+                <span>Dùng Bùa Lai Giống (Còn: {charmQty})</span>
               </label>
 
               <button
@@ -781,8 +898,8 @@ export const BreedingModal: React.FC<BreedingModalProps> = ({
                 onClick={() => onBreed(parentAId, parentBId, useCharm && charmQty > 0)}
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:bg-stone-300 text-white text-sm font-bold cursor-pointer transition"
               >
-                {state.pigs.length >= state.barnCapacity
-                  ? 'Chuồng Đã Đầy'
+                {isBarnFull && isBagFull
+                  ? 'Chuồng & Túi Đều Đầy'
                   : parentAId === parentBId
                   ? 'Chọn 2 Con Khác Nhau'
                   : 'Phối Giống Ngay!'}
@@ -1071,6 +1188,7 @@ export const QuestsModal: React.FC<QuestsModalProps> = ({
 /* ---------------- ACHIEVEMENTS & RANKINGS MODAL ---------------- */
 const ACHIEVEMENT_TABS: Array<{ id: 'all' | AchievementCategory; label: string }> = [
   { id: 'all', label: 'Tất Cả' },
+  { id: 'crop_farm', label: '🌾 Nông Trại' },
   { id: 'collection', label: 'Sưu Tầm' },
   { id: 'care', label: 'Chăm Sóc' },
   { id: 'breed', label: 'Lai Tạo' },
@@ -1080,16 +1198,18 @@ const ACHIEVEMENT_TABS: Array<{ id: 'all' | AchievementCategory; label: string }
 
 interface AchievementsModalProps {
   state: FarmState;
+  initialCategory?: 'all' | AchievementCategory;
   onClose: () => void;
   onClaimAchievement: (achievementId: string) => void;
 }
 
 export const AchievementsModal: React.FC<AchievementsModalProps> = ({
   state,
+  initialCategory = 'all',
   onClose,
   onClaimAchievement,
 }) => {
-  const [activeCat, setActiveCat] = useState<'all' | AchievementCategory>('all');
+  const [activeCat, setActiveCat] = useState<'all' | AchievementCategory>(initialCategory);
   const [viewTab, setViewTab] = useState<'achievements' | 'rankings'>('achievements');
 
   const totalCount = state.achievements.length;
@@ -1191,6 +1311,8 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
               const clampedProgress = Math.min(a.progress, a.target);
               const pct = Math.min(100, Math.round((clampedProgress / a.target) * 100));
               const canClaim = a.unlocked && !a.claimed;
+              const rewardBreed = a.rewardBreedId ? BREED_MAP[a.rewardBreedId] : undefined;
+              const rewardBreedBadge = rewardBreed ? getBreedRarityBadge(rewardBreed) : null;
 
               return (
                 <div
@@ -1200,6 +1322,8 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                       ? 'bg-amber-50 border-emerald-500 shadow-sm'
                       : a.claimed
                       ? 'bg-[#f4e7ce]/80 border-[#b79a72]'
+                      : rewardBreed
+                      ? 'bg-gradient-to-br from-amber-50/90 to-rose-50/60 border-amber-500'
                       : 'bg-white/85 border-[#c29b68]'
                   }`}
                 >
@@ -1222,6 +1346,26 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                     </span>
                   </div>
 
+                  {/* Exclusive Non-Breedable Pig Reward Showcase */}
+                  {rewardBreed && rewardBreedBadge && (
+                    <div className="p-2 rounded-lg bg-white/90 border border-amber-400 flex items-center gap-2.5 shadow-xs">
+                      <div className="w-11 h-11 rounded-lg bg-[#fef3c7] border border-amber-300 flex items-center justify-center shrink-0">
+                        <PigSprite breedId={rewardBreed.id} stage="adult" size={40} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-extrabold text-[#3c1e08] truncate">
+                          🎁 Thưởng giống: {rewardBreed.name}
+                        </div>
+                        <span
+                          className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5"
+                          style={{ color: rewardBreedBadge.color, backgroundColor: rewardBreedBadge.bg }}
+                        >
+                          {rewardBreedBadge.label}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Progress bar */}
                   <div className="w-full h-2 rounded-full bg-[#e7d6b7] overflow-hidden">
                     <div
@@ -1233,14 +1377,19 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                   </div>
 
                   {/* Rewards + Claim Action */}
-                  <div className="flex items-center justify-between gap-2 pt-0.5">
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                  <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
+                    <div className="flex items-center flex-wrap gap-1.5 text-[11px] font-bold">
                       <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-900 border border-sky-300 font-mono-nums">
                         +{a.rewardGems} Ngọc
                       </span>
                       {a.rewardCoins ? (
                         <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono-nums">
                           +{a.rewardCoins.toLocaleString('vi-VN')} ₫
+                        </span>
+                      ) : null}
+                      {rewardBreed ? (
+                        <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300">
+                          +1 Heo Độc Quyền
                         </span>
                       ) : null}
                     </div>
